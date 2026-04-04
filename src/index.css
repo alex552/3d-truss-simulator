@@ -95,9 +95,50 @@ button {
 }
 
 .member-line {
-  stroke: #2f6fed;
+  stroke: #111111;
   stroke-width: 4;
   stroke-linecap: round;
+  cursor: pointer;
+}
+
+.axis-line {
+  stroke-width: 2.5;
+  stroke-linecap: round;
+}
+
+.axis-line-x {
+  stroke: #e03131;
+}
+
+.axis-line-z {
+  stroke: #1971c2;
+}
+
+.axis-arrow-x {
+  fill: #e03131;
+}
+
+.axis-arrow-z {
+  fill: #1971c2;
+}
+
+.axis-label {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.axis-label-x {
+  fill: #e03131;
+}
+
+.axis-label-z {
+  fill: #1971c2;
+}
+
+.axis-hint {
+  fill: #4a5568;
+  font-size: 12px;
+  font-weight: 500;
 }
 
 .node-circle {

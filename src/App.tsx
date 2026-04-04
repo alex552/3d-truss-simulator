@@ -7,7 +7,7 @@ export default function App() {
   const [nodes, setNodes] = useState<Node2D[]>([])
   const [members, setMembers] = useState<Member[]>([])
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null)
-  const [show3D, setShow3D] = useState(false)
+  const [show3D, setShow3D] = useState(true)
 
   const handleAddNode = (x: number, y: number) => {
     setNodes((currentNodes) => [
@@ -42,16 +42,38 @@ export default function App() {
     setSelectedNodeId(null)
   }
 
+  const handleDeleteNode = (nodeId: string) => {
+    setNodes((currentNodes) => currentNodes.filter((node) => node.id !== nodeId))
+    setMembers((currentMembers) =>
+      currentMembers.filter(
+        (member) => member.nodeAId !== nodeId && member.nodeBId !== nodeId,
+      ),
+    )
+    setSelectedNodeId((currentSelectedNodeId) =>
+      currentSelectedNodeId === nodeId ? null : currentSelectedNodeId,
+    )
+  }
+
+  const handleDeleteMember = (memberId: string) => {
+    setMembers((currentMembers) =>
+      currentMembers.filter((member) => member.id !== memberId),
+    )
+  }
+
   return (
     <main className="app-shell">
       <section className="hero">
         <div>
           <h1>Truss Playground</h1>
-          <p>Phase 1 proof of concept: sketch a 2D truss, then inspect it in 3D.</p>
+          <p>Phase 1 proof of concept: sketch a truss on the X/Z plane, then inspect it in 3D.</p>
         </div>
 
-        <button type="button" className="view-button" onClick={() => setShow3D(true)}>
-          View in 3D
+        <button
+          type="button"
+          className="view-button"
+          onClick={() => setShow3D((currentValue) => !currentValue)}
+        >
+          {show3D ? 'Hide 3D View' : 'Show 3D View'}
         </button>
       </section>
 
@@ -62,6 +84,8 @@ export default function App() {
           selectedNodeId={selectedNodeId}
           onAddNode={handleAddNode}
           onSelectNode={handleSelectNode}
+          onDeleteNode={handleDeleteNode}
+          onDeleteMember={handleDeleteMember}
         />
 
         {show3D ? <Truss3DView nodes={nodes} members={members} /> : null}
