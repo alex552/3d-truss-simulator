@@ -1,6 +1,7 @@
 import { Line, OrbitControls, Text } from '@react-three/drei'
 import { Canvas } from '@react-three/fiber'
 import { useMemo } from 'react'
+import { EDITOR_HEIGHT, EDITOR_WIDTH, GRID_SIZE_PX } from '../constants'
 import type { Member, Node2D } from '../types'
 
 type Truss3DViewProps = {
@@ -9,7 +10,11 @@ type Truss3DViewProps = {
 }
 
 function toWorldPosition(node: Node2D, lowestNodeY: number): [number, number, number] {
-  return [(node.x - 260) / 60, 0, (lowestNodeY - node.y) / 60]
+  return [
+    (node.x - EDITOR_WIDTH / 2) / GRID_SIZE_PX,
+    0,
+    (lowestNodeY - node.y) / GRID_SIZE_PX,
+  ]
 }
 
 function MemberLine({
@@ -100,7 +105,7 @@ export function Truss3DView({ nodes, members }: Truss3DViewProps) {
 
           <OrbitControls
             makeDefault
-            target={[0, 0, 0]}
+            target={[0, 0, EDITOR_HEIGHT / (2 * GRID_SIZE_PX)]}
             minPolarAngle={0.2}
             maxPolarAngle={Math.PI / 2 - 0.05}
           />

@@ -6,28 +6,44 @@ import type { Member, Node2D } from './types'
 export default function App() {
   const [nodes, setNodes] = useState<Node2D[]>([])
   const [members, setMembers] = useState<Member[]>([])
-  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null)
+  const [drawingNodeId, setDrawingNodeId] = useState<string | null>(null)
   const [show3D, setShow3D] = useState(true)
 
-  const handleAddNode = (x: number, y: number) => {
-    setNodes((currentNodes) => [
-      ...currentNodes,
-      {
-        id: crypto.randomUUID(),
-        x,
-        y,
-      },
-    ])
-  }
+  const createNode = (x: number, y: number): Node2D => ({
+    id: crypto.randomUUID(),
+    x,
+    y,
+  })
 
-  const handleSelectNode = (nodeId: string) => {
-    if (!selectedNodeId) {
-      setSelectedNodeId(nodeId)
+  const handleCanvasClick = (x: number, y: number) => {
+    const newNode = createNode(x, y)
+
+    if (!drawingNodeId) {
+      setNodes((currentNodes) => [...currentNodes, newNode])
+      setDrawingNodeId(newNode.id)
       return
     }
 
-    if (selectedNodeId === nodeId) {
-      setSelectedNodeId(null)
+    setNodes((currentNodes) => [...currentNodes, newNode])
+    setMembers((currentMembers) => [
+      ...currentMembers,
+      {
+        id: crypto.randomUUID(),
+        nodeAId: drawingNodeId,
+        nodeBId: newNode.id,
+      },
+    ])
+    setDrawingNodeId(null)
+  }
+
+  const handleNodeClick = (nodeId: string) => {
+    if (!drawingNodeId) {
+      setDrawingNodeId(nodeId)
+      return
+    }
+
+    if (drawingNodeId === nodeId) {
+      setDrawingNodeId(null)
       return
     }
 
@@ -35,11 +51,11 @@ export default function App() {
       ...currentMembers,
       {
         id: crypto.randomUUID(),
-        nodeAId: selectedNodeId,
+        nodeAId: drawingNodeId,
         nodeBId: nodeId,
       },
     ])
-    setSelectedNodeId(null)
+    setDrawingNodeId(null)
   }
 
   const handleDeleteNode = (nodeId: string) => {
@@ -49,8 +65,8 @@ export default function App() {
         (member) => member.nodeAId !== nodeId && member.nodeBId !== nodeId,
       ),
     )
-    setSelectedNodeId((currentSelectedNodeId) =>
-      currentSelectedNodeId === nodeId ? null : currentSelectedNodeId,
+    setDrawingNodeId((currentDrawingNodeId) =>
+      currentDrawingNodeId === nodeId ? null : currentDrawingNodeId,
     )
   }
 
@@ -81,9 +97,9 @@ export default function App() {
         <Editor2D
           nodes={nodes}
           members={members}
-          selectedNodeId={selectedNodeId}
-          onAddNode={handleAddNode}
-          onSelectNode={handleSelectNode}
+          drawingNodeId={drawingNodeId}
+          onCanvasClick={handleCanvasClick}
+          onNodeClick={handleNodeClick}
           onDeleteNode={handleDeleteNode}
           onDeleteMember={handleDeleteMember}
         />

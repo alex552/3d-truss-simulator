@@ -141,6 +141,23 @@ button {
   font-weight: 500;
 }
 
+.member-length {
+  fill: #334155;
+  font-size: 11px;
+  font-weight: 600;
+  pointer-events: none;
+}
+
+.member-length {
+  paint-order: stroke;
+  stroke: rgba(255, 255, 255, 0.95);
+  stroke-width: 4px;
+}
+
+.member-line-preview {
+  stroke-dasharray: 8 6;
+}
+
 .node-circle {
   fill: #f76808;
   stroke: #ffffff;

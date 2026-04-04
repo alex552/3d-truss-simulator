@@ -1,38 +1,77 @@
+import { useMemo, useState } from 'react'
 import type { MouseEvent } from 'react'
+import { EDITOR_HEIGHT, EDITOR_WIDTH, GRID_SIZE_PX } from '../constants'
 import type { Member, Node2D } from '../types'
 
 type Editor2DProps = {
   nodes: Node2D[]
   members: Member[]
-  selectedNodeId: string | null
-  onAddNode: (x: number, y: number) => void
-  onSelectNode: (nodeId: string) => void
+  drawingNodeId: string | null
+  onCanvasClick: (x: number, y: number) => void
+  onNodeClick: (nodeId: string) => void
   onDeleteNode: (nodeId: string) => void
   onDeleteMember: (memberId: string) => void
 }
 
-const WIDTH = 520
-const HEIGHT = 520
 const NODE_RADIUS = 8
 const AXIS_MARGIN = 28
 
 export function Editor2D({
   nodes,
   members,
-  selectedNodeId,
-  onAddNode,
-  onSelectNode,
+  drawingNodeId,
+  onCanvasClick,
+  onNodeClick,
   onDeleteNode,
   onDeleteMember,
 }: Editor2DProps) {
-  const handleCanvasClick = (event: MouseEvent<SVGSVGElement>) => {
+  const [previewPoint, setPreviewPoint] = useState<{ x: number; y: number } | null>(null)
+
+  const drawingNode = useMemo(
+    () => nodes.find((node) => node.id === drawingNodeId) ?? null,
+    [nodes, drawingNodeId],
+  )
+
+  const getSvgPoint = (event: MouseEvent<SVGSVGElement>) => {
     const rect = event.currentTarget.getBoundingClientRect()
-    const scaleX = WIDTH / rect.width
-    const scaleY = HEIGHT / rect.height
-    const x = (event.clientX - rect.left) * scaleX
-    const y = (event.clientY - rect.top) * scaleY
-    onAddNode(x, y)
+    const scaleX = EDITOR_WIDTH / rect.width
+    const scaleY = EDITOR_HEIGHT / rect.height
+    return {
+      x: (event.clientX - rect.left) * scaleX,
+      y: (event.clientY - rect.top) * scaleY,
+    }
   }
+
+  const handleCanvasClick = (event: MouseEvent<SVGSVGElement>) => {
+    const point = getSvgPoint(event)
+    onCanvasClick(point.x, point.y)
+    setPreviewPoint(point)
+  }
+
+  const handleMouseMove = (event: MouseEvent<SVGSVGElement>) => {
+    if (!drawingNode) {
+      return
+    }
+
+    setPreviewPoint(getSvgPoint(event))
+  }
+
+  const previewLengthInMeters =
+    drawingNode && previewPoint
+      ? Math.hypot(previewPoint.x - drawingNode.x, previewPoint.y - drawingNode.y) / GRID_SIZE_PX
+      : null
+
+  const previewMidpoint =
+    drawingNode && previewPoint
+      ? {
+          x: (drawingNode.x + previewPoint.x) / 2,
+          y: (drawingNode.y + previewPoint.y) / 2,
+        }
+      : null
+
+  const isPreviewVisible =
+    Boolean(drawingNode && previewPoint) &&
+    !(drawingNode?.x === previewPoint?.x && drawingNode?.y === previewPoint?.y)
 
   return (
     <div className="panel">
@@ -40,16 +79,17 @@ export function Editor2D({
         <div>
           <h2>2D Editor</h2>
           <p>
-            Draw on the X/Z plane. Click empty space to add nodes, click two nodes to create
-            a member, and right-click a node or member to delete it.
+            Draw on the X/Z plane. Click to start a member, move to preview its length,
+            click again to finish it, and right-click a node or member to delete it.
           </p>
         </div>
       </div>
 
       <svg
         className="editor-surface"
-        viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
+        viewBox={`0 0 ${EDITOR_WIDTH} ${EDITOR_HEIGHT}`}
         onClick={handleCanvasClick}
+        onMouseMove={handleMouseMove}
         role="img"
         aria-label="2D truss editor"
       >
@@ -76,33 +116,41 @@ export function Editor2D({
           </marker>
         </defs>
 
-        <rect x="0" y="0" width={WIDTH} height={HEIGHT} fill="transparent" />
+        <rect x="0" y="0" width={EDITOR_WIDTH} height={EDITOR_HEIGHT} fill="transparent" />
 
         <line
           x1={AXIS_MARGIN}
-          y1={HEIGHT - AXIS_MARGIN}
+          y1={EDITOR_HEIGHT - AXIS_MARGIN}
           x2={AXIS_MARGIN + 72}
-          y2={HEIGHT - AXIS_MARGIN}
+          y2={EDITOR_HEIGHT - AXIS_MARGIN}
           className="axis-line axis-line-x"
           markerEnd="url(#axis-arrow-x)"
           pointerEvents="none"
         />
         <line
           x1={AXIS_MARGIN}
-          y1={HEIGHT - AXIS_MARGIN}
+          y1={EDITOR_HEIGHT - AXIS_MARGIN}
           x2={AXIS_MARGIN}
-          y2={HEIGHT - AXIS_MARGIN - 72}
+          y2={EDITOR_HEIGHT - AXIS_MARGIN - 72}
           className="axis-line axis-line-z"
           markerEnd="url(#axis-arrow-z)"
           pointerEvents="none"
         />
-        <text x={AXIS_MARGIN + 84} y={HEIGHT - AXIS_MARGIN + 5} className="axis-label axis-label-x">
+        <text
+          x={AXIS_MARGIN + 84}
+          y={EDITOR_HEIGHT - AXIS_MARGIN + 5}
+          className="axis-label axis-label-x"
+        >
           X
         </text>
-        <text x={AXIS_MARGIN - 4} y={HEIGHT - AXIS_MARGIN - 84} className="axis-label axis-label-z">
+        <text
+          x={AXIS_MARGIN - 4}
+          y={EDITOR_HEIGHT - AXIS_MARGIN - 84}
+          className="axis-label axis-label-z"
+        >
           Z
         </text>
-        <text x={AXIS_MARGIN} y={HEIGHT - AXIS_MARGIN + 26} className="axis-hint">
+        <text x={AXIS_MARGIN} y={EDITOR_HEIGHT - AXIS_MARGIN + 26} className="axis-hint">
           Y axis points out of the screen
         </text>
 
@@ -114,22 +162,51 @@ export function Editor2D({
             return null
           }
 
+          const lengthInMeters =
+            Math.hypot(nodeB.x - nodeA.x, nodeB.y - nodeA.y) / GRID_SIZE_PX
+          const midX = (nodeA.x + nodeB.x) / 2
+          const midY = (nodeA.y + nodeB.y) / 2
+
           return (
-            <line
-              key={member.id}
-              x1={nodeA.x}
-              y1={nodeA.y}
-              x2={nodeB.x}
-              y2={nodeB.y}
-              className="member-line"
-              onContextMenu={(event) => {
-                event.preventDefault()
-                event.stopPropagation()
-                onDeleteMember(member.id)
-              }}
-            />
+            <g key={member.id}>
+              <line
+                x1={nodeA.x}
+                y1={nodeA.y}
+                x2={nodeB.x}
+                y2={nodeB.y}
+                className="member-line"
+                onContextMenu={(event) => {
+                  event.preventDefault()
+                  event.stopPropagation()
+                  onDeleteMember(member.id)
+                }}
+              />
+              <text x={midX} y={midY - 10} className="member-length" textAnchor="middle">
+                {lengthInMeters.toFixed(2)} m
+              </text>
+            </g>
           )
         })}
+
+        {drawingNode && isPreviewVisible && previewPoint && previewMidpoint && previewLengthInMeters ? (
+          <g pointerEvents="none">
+            <line
+              x1={drawingNode.x}
+              y1={drawingNode.y}
+              x2={previewPoint.x}
+              y2={previewPoint.y}
+              className="member-line member-line-preview"
+            />
+            <text
+              x={previewMidpoint.x}
+              y={previewMidpoint.y - 10}
+              className="member-length"
+              textAnchor="middle"
+            >
+              {previewLengthInMeters.toFixed(2)} m
+            </text>
+          </g>
+        ) : null}
 
         {nodes.map((node) => (
           <circle
@@ -137,10 +214,10 @@ export function Editor2D({
             cx={node.x}
             cy={node.y}
             r={NODE_RADIUS}
-            className={selectedNodeId === node.id ? 'node-circle is-selected' : 'node-circle'}
+            className={drawingNodeId === node.id ? 'node-circle is-selected' : 'node-circle'}
             onClick={(event) => {
               event.stopPropagation()
-              onSelectNode(node.id)
+              onNodeClick(node.id)
             }}
             onContextMenu={(event) => {
               event.preventDefault()
