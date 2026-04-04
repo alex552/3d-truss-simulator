@@ -1,0 +1,131 @@
+:root {
+  font-family:
+    Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  color: #14213d;
+  background: linear-gradient(180deg, #f8fafc 0%, #edf2f7 100%);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+}
+
+button {
+  font: inherit;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+.app-shell {
+  min-height: 100vh;
+  padding: 24px;
+}
+
+.hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.hero h1,
+.panel-header h2 {
+  margin: 0;
+}
+
+.hero p,
+.panel-header p {
+  margin: 6px 0 0;
+  color: #4a5568;
+}
+
+.view-button {
+  border: none;
+  border-radius: 12px;
+  padding: 12px 18px;
+  background: #2f6fed;
+  color: white;
+  cursor: pointer;
+}
+
+.workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 20px;
+}
+
+.workspace-two-up {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.panel {
+  border: 1px solid #d9e2ec;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
+  overflow: hidden;
+}
+
+.panel-header {
+  padding: 16px 18px 12px;
+  border-bottom: 1px solid #edf2f7;
+}
+
+.editor-surface,
+.canvas-shell {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+}
+
+.editor-surface {
+  display: block;
+  background:
+    linear-gradient(0deg, rgba(47, 111, 237, 0.04), rgba(47, 111, 237, 0.04)),
+    linear-gradient(90deg, rgba(47, 111, 237, 0.08) 1px, transparent 1px),
+    linear-gradient(rgba(47, 111, 237, 0.08) 1px, transparent 1px);
+  background-size: 100% 100%, 32px 32px, 32px 32px;
+  cursor: crosshair;
+}
+
+.member-line {
+  stroke: #2f6fed;
+  stroke-width: 4;
+  stroke-linecap: round;
+}
+
+.node-circle {
+  fill: #f76808;
+  stroke: #ffffff;
+  stroke-width: 3;
+  cursor: pointer;
+}
+
+.node-circle.is-selected {
+  fill: #c2410c;
+}
+
+.canvas-shell canvas {
+  display: block;
+}
+
+@media (max-width: 960px) {
+  .app-shell {
+    padding: 16px;
+  }
+
+  .hero {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .workspace-two-up {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
