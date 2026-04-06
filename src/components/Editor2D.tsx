@@ -2,11 +2,16 @@ import { useMemo, useRef, useState } from 'react'
 import type { ReactElement } from 'react'
 import type { MouseEvent } from 'react'
 import { EDITOR_HEIGHT, EDITOR_WIDTH, GRID_SIZE_PX } from '../constants'
+import { normalizeSupportType, type RuntimeSupportType } from '../lib/truss-model'
 import type {
   HorizontalLoadDirection,
   Member,
+  MemberAnalysisResult,
   Node2D,
+  NodeDisplacement,
+  NodeReaction,
   SupportType,
+  TrussAnalysisResult,
   VerticalLoadDirection,
 } from '../types'
 import type { EditorTool, SelectedEntity } from '../App'
@@ -14,6 +19,8 @@ import type { EditorTool, SelectedEntity } from '../App'
 type Editor2DProps = {
   nodes: Node2D[]
   members: Member[]
+  analysis: TrussAnalysisResult
+  displacementDisplayScale: number
   activeTool: EditorTool
   memberStartNodeId: string | null
   selectedEntity: SelectedEntity
@@ -23,6 +30,7 @@ type Editor2DProps = {
   onMoveNode: (nodeId: string, x: number, y: number) => void
   onSetActiveTool: (tool: EditorTool) => void
   onSetSelectedNodeSupport: (support: SupportType | undefined) => void
+  onSetSelectedMemberAxialStiffness: (axialStiffnessKn: number) => void
   onSetSelectedNodeHorizontalLoad: (
     magnitudeKn: number,
     direction: HorizontalLoadDirection,
@@ -44,7 +52,6 @@ const TOOL_OPTIONS: { value: EditorTool; label: string }[] = [
 ]
 const SUPPORT_OPTIONS: { value: SupportType | undefined; label: string }[] = [
   { value: undefined, label: 'None' },
-  { value: 'fixed', label: 'Fixed' },
   { value: 'pinned', label: 'Pinned' },
   { value: 'roller-x', label: 'Roller X' },
   { value: 'roller-z', label: 'Roller Z' },
@@ -53,6 +60,8 @@ const SUPPORT_OPTIONS: { value: SupportType | undefined; label: string }[] = [
 export function Editor2D({
   nodes,
   members,
+  analysis,
+  displacementDisplayScale,
   activeTool,
   memberStartNodeId,
   selectedEntity,
@@ -62,6 +71,7 @@ export function Editor2D({
   onMoveNode,
   onSetActiveTool,
   onSetSelectedNodeSupport,
+  onSetSelectedMemberAxialStiffness,
   onSetSelectedNodeHorizontalLoad,
   onSetSelectedNodeVerticalLoad,
   onDeleteNode,
@@ -82,6 +92,29 @@ export function Editor2D({
         ? nodes.find((node) => node.id === selectedEntity.id) ?? null
         : null,
     [nodes, selectedEntity],
+  )
+
+  const selectedMember = useMemo(
+    () =>
+      selectedEntity?.type === 'member'
+        ? members.find((member) => member.id === selectedEntity.id) ?? null
+        : null,
+    [members, selectedEntity],
+  )
+
+  const displacementByNodeId = useMemo(
+    () => new Map(analysis.displacements.map((displacement) => [displacement.nodeId, displacement])),
+    [analysis.displacements],
+  )
+
+  const reactionByNodeId = useMemo(
+    () => new Map(analysis.reactions.map((reaction) => [reaction.nodeId, reaction])),
+    [analysis.reactions],
+  )
+
+  const memberResultByMemberId = useMemo(
+    () => new Map(analysis.memberResults.map((result) => [result.memberId, result])),
+    [analysis.memberResults],
   )
 
   const getSvgPoint = (event: MouseEvent<SVGSVGElement>) => {
@@ -140,7 +173,9 @@ export function Editor2D({
     dragNodeIdRef.current = null
   }
 
-  const selectedNodeSupport = selectedNode?.support
+  const selectedNodeSupport = normalizeSupportType(
+    selectedNode?.support as RuntimeSupportType | undefined,
+  )
   const selectedHorizontalLoad = selectedNode?.horizontalLoad
   const selectedVerticalLoad = selectedNode?.verticalLoad
 
@@ -162,6 +197,8 @@ export function Editor2D({
 
   const horizontalDirectionOptions: HorizontalLoadDirection[] = ['left', 'right']
   const verticalDirectionOptions: VerticalLoadDirection[] = ['up', 'down']
+  const isStableAnalysis =
+    analysis.status === 'stable-determinate' || analysis.status === 'stable-indeterminate'
 
   const getNodeClassName = (nodeId: string) => {
     const isSelected = selectedEntity?.type === 'node' && selectedEntity.id === nodeId
@@ -286,6 +323,25 @@ export function Editor2D({
                 </div>
               </div>
             </div>
+          ) : selectedMember ? (
+            <div className="member-properties" aria-label="Selected member properties">
+              <div className="load-editor">
+                <span className="load-label">EA</span>
+                <input
+                  className="load-input member-stiffness-input"
+                  type="number"
+                  min="1"
+                  step="1000"
+                  value={selectedMember.axialStiffnessKn}
+                  onChange={(event) =>
+                    onSetSelectedMemberAxialStiffness(
+                      Math.max(1, Number(event.target.value) || selectedMember.axialStiffnessKn),
+                    )
+                  }
+                />
+                <span className="load-unit">kN</span>
+              </div>
+            </div>
           ) : null}
         </div>
 
@@ -403,9 +459,25 @@ export function Editor2D({
               <text x={midX} y={midY - 10} className="member-length" textAnchor="middle">
                 {lengthInMeters.toFixed(2)} m
               </text>
+              {isStableAnalysis ? (
+                <MemberForceLabel
+                  midX={midX}
+                  midY={midY}
+                  result={memberResultByMemberId.get(member.id)}
+                />
+              ) : null}
             </g>
           )
         })}
+
+        {isStableAnalysis && displacementDisplayScale > 0 ? (
+          <DisplacedShapeOverlay
+            nodes={nodes}
+            members={members}
+            displacementByNodeId={displacementByNodeId}
+            displayScale={displacementDisplayScale}
+          />
+        ) : null}
 
         {memberStartNode && isPreviewVisible && previewPoint && previewMidpoint && previewLengthInMeters ? (
           <g pointerEvents="none">
@@ -431,6 +503,9 @@ export function Editor2D({
           <g key={node.id}>
             <SupportSymbol node={node} />
             <NodeLoads node={node} />
+            {isStableAnalysis ? (
+              <ReactionOverlay node={node} reaction={reactionByNodeId.get(node.id)} />
+            ) : null}
             <circle
               cx={node.x}
               cy={node.y}
@@ -468,7 +543,9 @@ export function Editor2D({
 }
 
 function SupportSymbol({ node }: { node: Node2D }) {
-  if (!node.support) {
+  const support = normalizeSupportType(node.support as RuntimeSupportType | undefined)
+
+  if (!support) {
     return null
   }
 
@@ -492,16 +569,7 @@ function SupportSymbol({ node }: { node: Node2D }) {
     </>
   )
 
-  if (node.support === 'fixed') {
-    return (
-      <g className="support-symbol" pointerEvents="none">
-        <rect x={node.x - 12} y={baseY} width={24} height={12} rx={2} className="support-shape" />
-        <line x1={node.x} y1={node.y + 8} x2={node.x} y2={baseY} className="support-link" />
-      </g>
-    )
-  }
-
-  if (node.support === 'pinned') {
+  if (support === 'pinned') {
     return (
       <g className="support-symbol" pointerEvents="none">
         <line x1={node.x} y1={node.y + 8} x2={node.x} y2={baseY - 2} className="support-link" />
@@ -513,7 +581,7 @@ function SupportSymbol({ node }: { node: Node2D }) {
     )
   }
 
-  if (node.support === 'roller-x') {
+  if (support === 'roller-x') {
     return (
       <g className="support-symbol" pointerEvents="none">
         {rollerXSymbol}
@@ -597,4 +665,179 @@ function NodeLoads({ node }: { node: Node2D }) {
 
 function clampArrowLength(magnitudeKn: number) {
   return Math.min(72, Math.max(28, 20 + magnitudeKn * 4))
+}
+
+function DisplacedShapeOverlay({
+  nodes,
+  members,
+  displacementByNodeId,
+  displayScale,
+}: {
+  nodes: Node2D[]
+  members: Member[]
+  displacementByNodeId: Map<string, NodeDisplacement>
+  displayScale: number
+}) {
+  const nodeById = new Map(nodes.map((node) => [node.id, node]))
+
+  return (
+    <g pointerEvents="none">
+      {members.map((member) => {
+        const startNode = nodeById.get(member.nodeAId)
+        const endNode = nodeById.get(member.nodeBId)
+
+        if (!startNode || !endNode) {
+          return null
+        }
+
+        const displacedStart = getDisplacedNodePosition(
+          startNode,
+          displacementByNodeId.get(startNode.id),
+          displayScale,
+        )
+        const displacedEnd = getDisplacedNodePosition(
+          endNode,
+          displacementByNodeId.get(endNode.id),
+          displayScale,
+        )
+
+        return (
+          <line
+            key={member.id}
+            x1={displacedStart.x}
+            y1={displacedStart.y}
+            x2={displacedEnd.x}
+            y2={displacedEnd.y}
+            className="displaced-member-line"
+          />
+        )
+      })}
+    </g>
+  )
+}
+
+function MemberForceLabel({
+  midX,
+  midY,
+  result,
+}: {
+  midX: number
+  midY: number
+  result: MemberAnalysisResult | undefined
+}) {
+  if (!result) {
+    return null
+  }
+
+  return (
+    <text
+      x={midX}
+      y={midY + 16}
+      className={`member-force-label member-force-label-${result.state}`}
+      textAnchor="middle"
+    >
+      {formatSignedKn(result.axialForceKn)}
+    </text>
+  )
+}
+
+function ReactionOverlay({
+  node,
+  reaction,
+}: {
+  node: Node2D
+  reaction: NodeReaction | undefined
+}) {
+  if (!reaction) {
+    return null
+  }
+
+  return (
+    <>
+      {Math.abs(reaction.xKn) > 1e-6 ? (
+        <DirectionalResultArrow
+          startX={node.x}
+          startY={node.y - 18}
+          dx={reaction.xKn > 0 ? clampArrowLength(Math.abs(reaction.xKn)) : -clampArrowLength(Math.abs(reaction.xKn))}
+          dy={0}
+          label={formatSignedKn(reaction.xKn)}
+          labelDx={0}
+          labelDy={-8}
+        />
+      ) : null}
+      {Math.abs(reaction.zKn) > 1e-6 ? (
+        <DirectionalResultArrow
+          startX={node.x + 18}
+          startY={node.y}
+          dx={0}
+          dy={reaction.zKn > 0 ? -clampArrowLength(Math.abs(reaction.zKn)) : clampArrowLength(Math.abs(reaction.zKn))}
+          label={formatSignedKn(reaction.zKn)}
+          labelDx={10}
+          labelDy={-4}
+        />
+      ) : null}
+    </>
+  )
+}
+
+function DirectionalResultArrow({
+  startX,
+  startY,
+  dx,
+  dy,
+  label,
+  labelDx,
+  labelDy,
+}: {
+  startX: number
+  startY: number
+  dx: number
+  dy: number
+  label: string
+  labelDx: number
+  labelDy: number
+}) {
+  const endX = startX + dx
+  const endY = startY + dy
+
+  return (
+    <g className="reaction-overlay" pointerEvents="none">
+      <line x1={startX} y1={startY} x2={endX} y2={endY} className="reaction-arrow-line" />
+      <polygon points={getArrowHeadPoints(endX, endY, dx, dy)} className="reaction-arrow-head" />
+      <text
+        x={(startX + endX) / 2 + labelDx}
+        y={(startY + endY) / 2 + labelDy}
+        className="reaction-label-text"
+      >
+        {label}
+      </text>
+    </g>
+  )
+}
+
+function getDisplacedNodePosition(
+  node: Node2D,
+  displacement: NodeDisplacement | undefined,
+  displayScale: number,
+) {
+  return {
+    x: node.x + (displacement?.xMeters ?? 0) * GRID_SIZE_PX * displayScale,
+    y: node.y - (displacement?.zMeters ?? 0) * GRID_SIZE_PX * displayScale,
+  }
+}
+
+function getArrowHeadPoints(endX: number, endY: number, dx: number, dy: number) {
+  if (Math.abs(dx) > Math.abs(dy)) {
+    return dx >= 0
+      ? `${endX},${endY} ${endX - 10},${endY - 5} ${endX - 10},${endY + 5}`
+      : `${endX},${endY} ${endX + 10},${endY - 5} ${endX + 10},${endY + 5}`
+  }
+
+  return dy >= 0
+    ? `${endX},${endY} ${endX - 5},${endY - 10} ${endX + 5},${endY - 10}`
+    : `${endX},${endY} ${endX - 5},${endY + 10} ${endX + 5},${endY + 10}`
+}
+
+function formatSignedKn(value: number) {
+  return `${value >= 0 ? '+' : ''}${value.toFixed(2)} kN`
 }

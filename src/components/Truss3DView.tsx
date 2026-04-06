@@ -2,6 +2,7 @@ import { Line, OrbitControls, Text } from '@react-three/drei'
 import { Canvas } from '@react-three/fiber'
 import { useMemo } from 'react'
 import { EDITOR_HEIGHT, EDITOR_WIDTH, GRID_SIZE_PX } from '../constants'
+import { normalizeSupportType, type RuntimeSupportType } from '../lib/truss-model'
 import type {
   HorizontalLoad,
   Member,
@@ -60,20 +61,12 @@ function SupportMarker({
   support,
 }: {
   position: [number, number, number]
-  support: SupportType
+  support: SupportType | RuntimeSupportType
 }) {
   const basePosition: [number, number, number] = [position[0], -0.18, position[2] - 0.22]
+  const normalizedSupport = normalizeSupportType(support)
 
-  if (support === 'fixed') {
-    return (
-      <mesh position={basePosition}>
-        <boxGeometry args={[0.42, 0.14, 0.22]} />
-        <meshStandardMaterial color="#495057" />
-      </mesh>
-    )
-  }
-
-  if (support === 'pinned') {
+  if (normalizedSupport === 'pinned') {
     return (
       <mesh position={basePosition} rotation={[Math.PI / 2, 0, 0]}>
         <coneGeometry args={[0.18, 0.28, 3]} />
@@ -82,7 +75,7 @@ function SupportMarker({
     )
   }
 
-  if (support === 'roller-x') {
+  if (normalizedSupport === 'roller-x') {
     return (
       <group position={basePosition}>
         <mesh rotation={[Math.PI / 2, 0, 0]}>

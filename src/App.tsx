@@ -1,6 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { AnalysisPanel } from './components/AnalysisPanel'
 import { Editor2D } from './components/Editor2D'
 import { Truss3DView } from './components/Truss3DView'
+import { analyzeTruss } from './lib/analysis'
+import { DEFAULT_MEMBER_AXIAL_STIFFNESS_KN } from './lib/truss-model'
+import { GRID_SIZE_PX } from './constants'
 import type {
   HorizontalLoadDirection,
   Member,
@@ -63,6 +67,7 @@ export default function App() {
         id: crypto.randomUUID(),
         nodeAId: memberStartNodeId,
         nodeBId: newNode.id,
+        axialStiffnessKn: DEFAULT_MEMBER_AXIAL_STIFFNESS_KN,
       },
     ])
     setMemberStartNodeId(null)
@@ -97,6 +102,7 @@ export default function App() {
         id: crypto.randomUUID(),
         nodeAId: memberStartNodeId,
         nodeBId: nodeId,
+        axialStiffnessKn: DEFAULT_MEMBER_AXIAL_STIFFNESS_KN,
       },
     ])
     setMemberStartNodeId(null)
@@ -174,6 +180,34 @@ export default function App() {
       ),
     )
   }
+
+  const handleSetSelectedMemberAxialStiffness = (axialStiffnessKn: number) => {
+    if (selectedEntity?.type !== 'member') {
+      return
+    }
+
+    setMembers((currentMembers) =>
+      currentMembers.map((member) =>
+        member.id === selectedEntity.id
+          ? {
+              ...member,
+              axialStiffnessKn,
+            }
+          : member,
+      ),
+    )
+  }
+
+  const analysis = useMemo(() => analyzeTruss(nodes, members), [nodes, members])
+
+  const displacementDisplayScale = useMemo(() => {
+    if (analysis.maxDisplacementMeters <= 0) {
+      return 0
+    }
+
+    const maxDisplacementPx = analysis.maxDisplacementMeters * GRID_SIZE_PX
+    return maxDisplacementPx > 0 ? 24 / maxDisplacementPx : 0
+  }, [analysis.maxDisplacementMeters])
 
   const handleSetSelectedNodeHorizontalLoad = (
     magnitudeKn: number,
@@ -280,6 +314,8 @@ export default function App() {
         <Editor2D
           nodes={nodes}
           members={members}
+          analysis={analysis}
+          displacementDisplayScale={displacementDisplayScale}
           activeTool={activeTool}
           memberStartNodeId={memberStartNodeId}
           selectedEntity={selectedEntity}
@@ -289,6 +325,7 @@ export default function App() {
           onMoveNode={handleMoveNode}
           onSetActiveTool={handleSetActiveTool}
           onSetSelectedNodeSupport={handleSetSelectedNodeSupport}
+          onSetSelectedMemberAxialStiffness={handleSetSelectedMemberAxialStiffness}
           onSetSelectedNodeHorizontalLoad={handleSetSelectedNodeHorizontalLoad}
           onSetSelectedNodeVerticalLoad={handleSetSelectedNodeVerticalLoad}
           onDeleteNode={handleDeleteNode}
@@ -297,6 +334,13 @@ export default function App() {
 
         {show3D ? <Truss3DView nodes={nodes} members={members} /> : null}
       </section>
+
+      <AnalysisPanel
+        analysis={analysis}
+        nodes={nodes}
+        members={members}
+        displacementDisplayScale={displacementDisplayScale}
+      />
     </main>
   )
 }
