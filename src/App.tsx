@@ -1,13 +1,22 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Editor2D } from './components/Editor2D'
 import { Truss3DView } from './components/Truss3DView'
-import type { Member, Node2D } from './types'
+import type { Member, Node2D, SupportType } from './types'
+
+export type EditorTool = 'select' | 'node' | 'member'
+
+export type SelectedEntity =
+  | { type: 'node'; id: string }
+  | { type: 'member'; id: string }
+  | null
 
 export default function App() {
   const [nodes, setNodes] = useState<Node2D[]>([])
   const [members, setMembers] = useState<Member[]>([])
-  const [drawingNodeId, setDrawingNodeId] = useState<string | null>(null)
+  const [memberStartNodeId, setMemberStartNodeId] = useState<string | null>(null)
+  const [selectedEntity, setSelectedEntity] = useState<SelectedEntity>(null)
   const [show3D, setShow3D] = useState(true)
+  const [activeTool, setActiveTool] = useState<EditorTool>('member')
 
   const createNode = (x: number, y: number): Node2D => ({
     id: crypto.randomUUID(),
@@ -16,11 +25,28 @@ export default function App() {
   })
 
   const handleCanvasClick = (x: number, y: number) => {
+    if (activeTool === 'select') {
+      setSelectedEntity(null)
+      return
+    }
+
+    if (activeTool === 'node') {
+      const newNode = createNode(x, y)
+      setNodes((currentNodes) => [...currentNodes, newNode])
+      setSelectedEntity({ type: 'node', id: newNode.id })
+      return
+    }
+
+    if (activeTool !== 'member') {
+      return
+    }
+
     const newNode = createNode(x, y)
 
-    if (!drawingNodeId) {
+    if (!memberStartNodeId) {
       setNodes((currentNodes) => [...currentNodes, newNode])
-      setDrawingNodeId(newNode.id)
+      setMemberStartNodeId(newNode.id)
+      setSelectedEntity({ type: 'node', id: newNode.id })
       return
     }
 
@@ -29,21 +55,33 @@ export default function App() {
       ...currentMembers,
       {
         id: crypto.randomUUID(),
-        nodeAId: drawingNodeId,
+        nodeAId: memberStartNodeId,
         nodeBId: newNode.id,
       },
     ])
-    setDrawingNodeId(null)
+    setMemberStartNodeId(null)
+    setSelectedEntity(null)
   }
 
   const handleNodeClick = (nodeId: string) => {
-    if (!drawingNodeId) {
-      setDrawingNodeId(nodeId)
+    if (activeTool === 'select') {
+      setSelectedEntity({ type: 'node', id: nodeId })
       return
     }
 
-    if (drawingNodeId === nodeId) {
-      setDrawingNodeId(null)
+    if (activeTool === 'node') {
+      return
+    }
+
+    if (!memberStartNodeId) {
+      setMemberStartNodeId(nodeId)
+      setSelectedEntity({ type: 'node', id: nodeId })
+      return
+    }
+
+    if (memberStartNodeId === nodeId) {
+      setMemberStartNodeId(null)
+      setSelectedEntity({ type: 'node', id: nodeId })
       return
     }
 
@@ -51,11 +89,34 @@ export default function App() {
       ...currentMembers,
       {
         id: crypto.randomUUID(),
-        nodeAId: drawingNodeId,
+        nodeAId: memberStartNodeId,
         nodeBId: nodeId,
       },
     ])
-    setDrawingNodeId(null)
+    setMemberStartNodeId(null)
+    setSelectedEntity(null)
+  }
+
+  const handleMemberClick = (memberId: string) => {
+    if (activeTool !== 'select') {
+      return
+    }
+
+    setSelectedEntity({ type: 'member', id: memberId })
+  }
+
+  const handleMoveNode = (nodeId: string, x: number, y: number) => {
+    setNodes((currentNodes) =>
+      currentNodes.map((node) =>
+        node.id === nodeId
+          ? {
+              ...node,
+              x,
+              y,
+            }
+          : node,
+      ),
+    )
   }
 
   const handleDeleteNode = (nodeId: string) => {
@@ -65,8 +126,11 @@ export default function App() {
         (member) => member.nodeAId !== nodeId && member.nodeBId !== nodeId,
       ),
     )
-    setDrawingNodeId((currentDrawingNodeId) =>
-      currentDrawingNodeId === nodeId ? null : currentDrawingNodeId,
+    setMemberStartNodeId((currentStartNodeId) =>
+      currentStartNodeId === nodeId ? null : currentStartNodeId,
+    )
+    setSelectedEntity((currentSelection) =>
+      currentSelection?.type === 'node' && currentSelection.id === nodeId ? null : currentSelection,
     )
   }
 
@@ -74,32 +138,99 @@ export default function App() {
     setMembers((currentMembers) =>
       currentMembers.filter((member) => member.id !== memberId),
     )
+    setSelectedEntity((currentSelection) =>
+      currentSelection?.type === 'member' && currentSelection.id === memberId
+        ? null
+        : currentSelection,
+    )
   }
+
+  const handleSetActiveTool = (tool: EditorTool) => {
+    setActiveTool(tool)
+    if (tool !== 'member') {
+      setMemberStartNodeId(null)
+    }
+  }
+
+  const handleSetSelectedNodeSupport = (support: SupportType | undefined) => {
+    if (selectedEntity?.type !== 'node') {
+      return
+    }
+
+    setNodes((currentNodes) =>
+      currentNodes.map((node) =>
+        node.id === selectedEntity.id
+          ? {
+              ...node,
+              support,
+            }
+          : node,
+      ),
+    )
+  }
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Delete' && event.key !== 'Backspace') {
+        return
+      }
+
+      const target = event.target as HTMLElement | null
+      const tagName = target?.tagName ?? ''
+      if (target?.isContentEditable || tagName === 'INPUT' || tagName === 'TEXTAREA') {
+        return
+      }
+
+      if (!selectedEntity) {
+        return
+      }
+
+      event.preventDefault()
+
+      if (selectedEntity.type === 'node') {
+        handleDeleteNode(selectedEntity.id)
+        return
+      }
+
+      handleDeleteMember(selectedEntity.id)
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [selectedEntity])
 
   return (
     <main className="app-shell">
       <section className="hero">
         <div>
           <h1>Truss Playground</h1>
-          <p>Phase 1 proof of concept: sketch a truss on the X/Z plane, then inspect it in 3D.</p>
+          <p>Sketch a truss on the X/Z plane, add supports, then inspect it in 3D.</p>
         </div>
 
-        <button
-          type="button"
-          className="view-button"
-          onClick={() => setShow3D((currentValue) => !currentValue)}
-        >
-          {show3D ? 'Hide 3D View' : 'Show 3D View'}
-        </button>
+        <div className="hero-actions">
+          <button
+            type="button"
+            className="view-button"
+            onClick={() => setShow3D((currentValue) => !currentValue)}
+          >
+            {show3D ? 'Hide 3D View' : 'Show 3D View'}
+          </button>
+        </div>
       </section>
 
       <section className={show3D ? 'workspace workspace-two-up' : 'workspace'}>
         <Editor2D
           nodes={nodes}
           members={members}
-          drawingNodeId={drawingNodeId}
+          activeTool={activeTool}
+          memberStartNodeId={memberStartNodeId}
+          selectedEntity={selectedEntity}
           onCanvasClick={handleCanvasClick}
           onNodeClick={handleNodeClick}
+          onMemberClick={handleMemberClick}
+          onMoveNode={handleMoveNode}
+          onSetActiveTool={handleSetActiveTool}
+          onSetSelectedNodeSupport={handleSetSelectedNodeSupport}
           onDeleteNode={handleDeleteNode}
           onDeleteMember={handleDeleteMember}
         />

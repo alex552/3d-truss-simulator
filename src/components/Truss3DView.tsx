@@ -2,7 +2,7 @@ import { Line, OrbitControls, Text } from '@react-three/drei'
 import { Canvas } from '@react-three/fiber'
 import { useMemo } from 'react'
 import { EDITOR_HEIGHT, EDITOR_WIDTH, GRID_SIZE_PX } from '../constants'
-import type { Member, Node2D } from '../types'
+import type { Member, Node2D, SupportType } from '../types'
 
 type Truss3DViewProps = {
   nodes: Node2D[]
@@ -46,6 +46,70 @@ function SceneAxes() {
         Z
       </Text>
     </>
+  )
+}
+
+function SupportMarker({
+  position,
+  support,
+}: {
+  position: [number, number, number]
+  support: SupportType
+}) {
+  const basePosition: [number, number, number] = [position[0], -0.18, position[2] - 0.22]
+
+  if (support === 'fixed') {
+    return (
+      <mesh position={basePosition}>
+        <boxGeometry args={[0.42, 0.14, 0.22]} />
+        <meshStandardMaterial color="#495057" />
+      </mesh>
+    )
+  }
+
+  if (support === 'pinned') {
+    return (
+      <mesh position={basePosition} rotation={[Math.PI / 2, 0, 0]}>
+        <coneGeometry args={[0.18, 0.28, 3]} />
+        <meshStandardMaterial color="#495057" />
+      </mesh>
+    )
+  }
+
+  if (support === 'roller-x') {
+    return (
+      <group position={basePosition}>
+        <mesh rotation={[Math.PI / 2, 0, 0]}>
+          <coneGeometry args={[0.18, 0.24, 3]} />
+          <meshStandardMaterial color="#495057" />
+        </mesh>
+        <mesh position={[-0.08, 0, -0.16]}>
+          <cylinderGeometry args={[0.05, 0.05, 0.06, 16]} />
+          <meshStandardMaterial color="#868e96" />
+        </mesh>
+        <mesh position={[0.08, 0, -0.16]}>
+          <cylinderGeometry args={[0.05, 0.05, 0.06, 16]} />
+          <meshStandardMaterial color="#868e96" />
+        </mesh>
+      </group>
+    )
+  }
+
+  return (
+    <group position={basePosition}>
+      <mesh rotation={[Math.PI / 2, 0, Math.PI / 2]}>
+        <coneGeometry args={[0.18, 0.24, 3]} />
+        <meshStandardMaterial color="#495057" />
+      </mesh>
+      <mesh position={[-0.16, 0, -0.05]} rotation={[0, 0, Math.PI / 2]}>
+        <cylinderGeometry args={[0.05, 0.05, 0.06, 16]} />
+        <meshStandardMaterial color="#868e96" />
+      </mesh>
+      <mesh position={[0.16, 0, -0.05]} rotation={[0, 0, Math.PI / 2]}>
+        <cylinderGeometry args={[0.05, 0.05, 0.06, 16]} />
+        <meshStandardMaterial color="#868e96" />
+      </mesh>
+    </group>
   )
 }
 
@@ -96,10 +160,13 @@ export function Truss3DView({ nodes, members }: Truss3DViewProps) {
             }
 
             return (
-              <mesh key={node.id} position={position}>
-                <sphereGeometry args={[0.12, 24, 24]} />
-                <meshStandardMaterial color="#f76808" />
-              </mesh>
+              <group key={node.id}>
+                {node.support ? <SupportMarker position={position} support={node.support} /> : null}
+                <mesh position={position}>
+                  <sphereGeometry args={[0.12, 24, 24]} />
+                  <meshStandardMaterial color="#f76808" />
+                </mesh>
+              </group>
             )
           })}
 
