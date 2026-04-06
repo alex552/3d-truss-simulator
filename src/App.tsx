@@ -13,7 +13,7 @@ import type {
   VerticalLoadDirection,
 } from './types'
 
-export type EditorTool = 'select' | 'node' | 'member'
+export type EditorTool = 'select' | 'drag' | 'node' | 'member'
 
 export type SelectedEntity =
   | { type: 'node'; id: string }
@@ -37,6 +37,10 @@ export default function App() {
   const handleCanvasClick = (x: number, y: number) => {
     if (activeTool === 'select') {
       setSelectedEntity(null)
+      return
+    }
+
+    if (activeTool === 'drag') {
       return
     }
 
@@ -80,7 +84,7 @@ export default function App() {
       return
     }
 
-    if (activeTool === 'node') {
+    if (activeTool === 'node' || activeTool === 'drag') {
       return
     }
 

@@ -1,9 +1,10 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactElement } from 'react'
 import type { MouseEvent } from 'react'
 import {
   EDITOR_HEIGHT,
   EDITOR_WIDTH,
+  GRID_SIZE_PX,
   PIXELS_PER_METER,
   pixelsToMeters,
   snapToGrid,
@@ -49,10 +50,33 @@ type Editor2DProps = {
   onDeleteMember: (memberId: string) => void
 }
 
+type Point = {
+  x: number
+  y: number
+}
+
+type Viewport = {
+  zoom: number
+  panX: number
+  panY: number
+}
+
+type PanSession = {
+  startScreenPoint: Point
+  startPanX: number
+  startPanY: number
+}
+
 const NODE_RADIUS = 8
 const AXIS_MARGIN = 28
+const MIN_ZOOM = 0.35
+const MAX_ZOOM = 3.5
+const ZOOM_STEP = 1.2
+const AUTO_PAN_EDGE_PX = 36
+const AUTO_PAN_SPEED_PX = 16
 const TOOL_OPTIONS: { value: EditorTool; label: string; title: string }[] = [
   { value: 'select', label: 'Select tool', title: 'Select' },
+  { value: 'drag', label: 'Drag view tool', title: 'Drag view' },
   { value: 'node', label: 'Node tool', title: 'Place node' },
   { value: 'member', label: 'Member tool', title: 'Draw member' },
 ]
@@ -83,9 +107,23 @@ export function Editor2D({
   onDeleteNode,
   onDeleteMember,
 }: Editor2DProps) {
-  const [previewPoint, setPreviewPoint] = useState<{ x: number; y: number } | null>(null)
+  const [previewPoint, setPreviewPoint] = useState<Point | null>(null)
+  const [viewport, setViewportState] = useState<Viewport>({
+    zoom: 1,
+    panX: 0,
+    panY: 0,
+  })
+  const [isSpacePressed, setIsSpacePressed] = useState(false)
+  const [isPanning, setIsPanning] = useState(false)
+
+  const viewportRef = useRef(viewport)
+  const svgRef = useRef<SVGSVGElement | null>(null)
   const dragNodeIdRef = useRef<string | null>(null)
   const dragMovedRef = useRef(false)
+  const suppressClickRef = useRef(false)
+  const panSessionRef = useRef<PanSession | null>(null)
+  const isPanningRef = useRef(false)
+  const spacePressedRef = useRef(false)
 
   const memberStartNode = useMemo(
     () => nodes.find((node) => node.id === memberStartNodeId) ?? null,
@@ -123,47 +161,116 @@ export function Editor2D({
     [analysis.memberResults],
   )
 
-  const getSvgPoint = (event: MouseEvent<SVGSVGElement>) => {
-    const rect = event.currentTarget.getBoundingClientRect()
+  const nodeById = useMemo(() => new Map(nodes.map((node) => [node.id, node])), [nodes])
+
+  const selectedNodeSupport = normalizeSupportType(
+    selectedNode?.support as RuntimeSupportType | undefined,
+  )
+  const selectedHorizontalLoad = selectedNode?.horizontalLoad
+  const selectedVerticalLoad = selectedNode?.verticalLoad
+
+  const horizontalDirectionOptions: HorizontalLoadDirection[] = ['left', 'right']
+  const verticalDirectionOptions: VerticalLoadDirection[] = ['up', 'down']
+  const isStableAnalysis =
+    analysis.status === 'stable-determinate' || analysis.status === 'stable-indeterminate'
+
+  const updateViewport = (nextViewport: Viewport) => {
+    viewportRef.current = nextViewport
+    setViewportState(nextViewport)
+  }
+
+  const updatePan = (panX: number, panY: number) => {
+    updateViewport({ ...viewportRef.current, panX, panY })
+  }
+
+  const getScreenPointFromClient = (
+    clientX: number,
+    clientY: number,
+    element: SVGSVGElement,
+  ): Point => {
+    const rect = element.getBoundingClientRect()
     const scaleX = EDITOR_WIDTH / rect.width
     const scaleY = EDITOR_HEIGHT / rect.height
+
     return {
-      x: (event.clientX - rect.left) * scaleX,
-      y: (event.clientY - rect.top) * scaleY,
+      x: (clientX - rect.left) * scaleX,
+      y: (clientY - rect.top) * scaleY,
     }
   }
 
-  const getSnappedSvgPoint = (event: MouseEvent<SVGSVGElement>) => {
-    const point = getSvgPoint(event)
+  const getScreenPoint = (event: MouseEvent<SVGSVGElement>): Point =>
+    getScreenPointFromClient(event.clientX, event.clientY, event.currentTarget)
 
-    return {
-      x: snapToGrid(point.x),
-      y: snapToGrid(point.y),
-    }
-  }
+  const screenToWorld = (screenPoint: Point, nextViewport = viewportRef.current): Point => ({
+    x: nextViewport.panX + screenPoint.x / nextViewport.zoom,
+    y: nextViewport.panY + screenPoint.y / nextViewport.zoom,
+  })
 
-  const handleCanvasClick = (event: MouseEvent<SVGSVGElement>) => {
-    if (dragMovedRef.current) {
-      dragMovedRef.current = false
+  const snapWorldPoint = (worldPoint: Point): Point => ({
+    x: snapToGrid(worldPoint.x),
+    y: snapToGrid(worldPoint.y),
+  })
+
+  const getSnappedWorldPoint = (
+    event: MouseEvent<SVGSVGElement>,
+    nextViewport = viewportRef.current,
+  ) => snapWorldPoint(screenToWorld(getScreenPoint(event), nextViewport))
+
+  const zoomAroundScreenPoint = (targetZoom: number, screenPoint: Point) => {
+    const nextZoom = clampZoom(targetZoom)
+    const currentViewport = viewportRef.current
+
+    if (Math.abs(nextZoom - currentViewport.zoom) < 1e-6) {
       return
     }
 
-    const point = getSnappedSvgPoint(event)
-    onCanvasClick(point.x, point.y)
-    setPreviewPoint(point)
+    const anchorWorld = screenToWorld(screenPoint, currentViewport)
+    updateViewport({
+      zoom: nextZoom,
+      panX: anchorWorld.x - screenPoint.x / nextZoom,
+      panY: anchorWorld.y - screenPoint.y / nextZoom,
+    })
   }
 
-  const handleMouseMove = (event: MouseEvent<SVGSVGElement>) => {
-    const point = getSnappedSvgPoint(event)
+  const resetViewport = () => {
+    updateViewport({
+      zoom: 1,
+      panX: 0,
+      panY: 0,
+    })
+  }
 
-    if (dragNodeIdRef.current) {
-      dragMovedRef.current = true
-      onMoveNode(dragNodeIdRef.current, point.x, point.y)
+  const fitViewportToModel = () => {
+    if (nodes.length === 0) {
+      resetViewport()
+      return
     }
 
-    if (activeTool === 'member' && memberStartNode) {
-      setPreviewPoint(point)
-    }
+    const xs = nodes.map((node) => node.x)
+    const ys = nodes.map((node) => node.y)
+    const minX = Math.min(...xs)
+    const maxX = Math.max(...xs)
+    const minY = Math.min(...ys)
+    const maxY = Math.max(...ys)
+    const padding = GRID_SIZE_PX * 3
+    const contentWidth = Math.max(maxX - minX, GRID_SIZE_PX * 4)
+    const contentHeight = Math.max(maxY - minY, GRID_SIZE_PX * 4)
+    const nextZoom = clampZoom(
+      Math.min(
+        EDITOR_WIDTH / (contentWidth + padding * 2),
+        EDITOR_HEIGHT / (contentHeight + padding * 2),
+      ),
+    )
+    const visibleWidth = EDITOR_WIDTH / nextZoom
+    const visibleHeight = EDITOR_HEIGHT / nextZoom
+    const centerX = (minX + maxX) / 2
+    const centerY = (minY + maxY) / 2
+
+    updateViewport({
+      zoom: nextZoom,
+      panX: centerX - visibleWidth / 2,
+      panY: centerY - visibleHeight / 2,
+    })
   }
 
   const previewLengthInMeters =
@@ -185,17 +292,7 @@ export function Editor2D({
     Boolean(memberStartNode && previewPoint) &&
     !(memberStartNode?.x === previewPoint?.x && memberStartNode?.y === previewPoint?.y)
 
-  const handleMouseUp = () => {
-    dragNodeIdRef.current = null
-  }
-
-  const selectedNodeSupport = normalizeSupportType(
-    selectedNode?.support as RuntimeSupportType | undefined,
-  )
-  const selectedHorizontalLoad = selectedNode?.horizontalLoad
-  const selectedVerticalLoad = selectedNode?.verticalLoad
-
-  const handleHorizontalMagnitudeChange = (value: string) => {
+  const horizontalMagnitudeChange = (value: string) => {
     const magnitudeKn = Number(value)
     onSetSelectedNodeHorizontalLoad(
       Number.isFinite(magnitudeKn) ? magnitudeKn : 0,
@@ -203,7 +300,7 @@ export function Editor2D({
     )
   }
 
-  const handleVerticalMagnitudeChange = (value: string) => {
+  const verticalMagnitudeChange = (value: string) => {
     const magnitudeKn = Number(value)
     onSetSelectedNodeVerticalLoad(
       Number.isFinite(magnitudeKn) ? magnitudeKn : 0,
@@ -211,10 +308,17 @@ export function Editor2D({
     )
   }
 
-  const horizontalDirectionOptions: HorizontalLoadDirection[] = ['left', 'right']
-  const verticalDirectionOptions: VerticalLoadDirection[] = ['up', 'down']
-  const isStableAnalysis =
-    analysis.status === 'stable-determinate' || analysis.status === 'stable-indeterminate'
+  const visibleWorldBounds = useMemo(
+    () => ({
+      minX: viewport.panX,
+      maxX: viewport.panX + EDITOR_WIDTH / viewport.zoom,
+      minY: viewport.panY,
+      maxY: viewport.panY + EDITOR_HEIGHT / viewport.zoom,
+    }),
+    [viewport.panX, viewport.panY, viewport.zoom],
+  )
+
+  const sceneTransform = `matrix(${viewport.zoom} 0 0 ${viewport.zoom} ${-viewport.panX * viewport.zoom} ${-viewport.panY * viewport.zoom})`
 
   const getNodeClassName = (nodeId: string) => {
     const isSelected = selectedEntity?.type === 'node' && selectedEntity.id === nodeId
@@ -231,6 +335,180 @@ export function Editor2D({
     const isSelected = selectedEntity?.type === 'member' && selectedEntity.id === memberId
     return isSelected ? 'member-line is-selected' : 'member-line'
   }
+
+  const shouldSuppressClick = () => {
+    if (!suppressClickRef.current) {
+      return false
+    }
+
+    suppressClickRef.current = false
+    return true
+  }
+
+  const stopPanning = () => {
+    if (!isPanningRef.current) {
+      return
+    }
+
+    isPanningRef.current = false
+    setIsPanning(false)
+    panSessionRef.current = null
+  }
+
+  const handleCanvasMouseDown = (event: MouseEvent<SVGSVGElement>) => {
+    const isPanGesture =
+      event.button === 1 ||
+      (spacePressedRef.current && event.button === 0) ||
+      (activeTool === 'drag' && event.button === 0)
+
+    if (!isPanGesture) {
+      return
+    }
+
+    event.preventDefault()
+    suppressClickRef.current = true
+    dragNodeIdRef.current = null
+    dragMovedRef.current = false
+    isPanningRef.current = true
+    setIsPanning(true)
+    panSessionRef.current = {
+      startScreenPoint: getScreenPoint(event),
+      startPanX: viewportRef.current.panX,
+      startPanY: viewportRef.current.panY,
+    }
+  }
+
+  const handleCanvasClick = (event: MouseEvent<SVGSVGElement>) => {
+    if (shouldSuppressClick()) {
+      return
+    }
+
+    if (dragMovedRef.current) {
+      dragMovedRef.current = false
+      return
+    }
+
+    const point = getSnappedWorldPoint(event)
+    onCanvasClick(point.x, point.y)
+    setPreviewPoint(point)
+  }
+
+  const handleMouseMove = (event: MouseEvent<SVGSVGElement>) => {
+    const screenPoint = getScreenPoint(event)
+
+    if (isPanningRef.current && panSessionRef.current) {
+      const currentZoom = viewportRef.current.zoom
+      updatePan(
+        panSessionRef.current.startPanX -
+          (screenPoint.x - panSessionRef.current.startScreenPoint.x) / currentZoom,
+        panSessionRef.current.startPanY -
+          (screenPoint.y - panSessionRef.current.startScreenPoint.y) / currentZoom,
+      )
+      return
+    }
+
+    let nextViewport = viewportRef.current
+
+    if (dragNodeIdRef.current) {
+      const autoPanDelta = getAutoPanDelta(screenPoint, nextViewport.zoom)
+
+      if (autoPanDelta.x !== 0 || autoPanDelta.y !== 0) {
+        nextViewport = {
+          ...nextViewport,
+          panX: nextViewport.panX + autoPanDelta.x,
+          panY: nextViewport.panY + autoPanDelta.y,
+        }
+        updateViewport(nextViewport)
+      }
+    }
+
+    const point = snapWorldPoint(screenToWorld(screenPoint, nextViewport))
+
+    if (dragNodeIdRef.current) {
+      dragMovedRef.current = true
+      onMoveNode(dragNodeIdRef.current, point.x, point.y)
+      return
+    }
+
+    if (activeTool === 'member' && memberStartNode) {
+      setPreviewPoint(point)
+    }
+  }
+
+  const handleMouseUp = () => {
+    if (dragMovedRef.current || isPanningRef.current) {
+      suppressClickRef.current = true
+    }
+
+    dragNodeIdRef.current = null
+    stopPanning()
+  }
+
+  useEffect(() => {
+    const svgElement = svgRef.current
+
+    if (!svgElement) {
+      return
+    }
+
+    const handleWheel = (event: WheelEvent) => {
+      event.preventDefault()
+
+      const zoomFactor = Math.exp(-event.deltaY * 0.0015)
+      zoomAroundScreenPoint(
+        viewportRef.current.zoom * zoomFactor,
+        getScreenPointFromClient(event.clientX, event.clientY, svgElement),
+      )
+    }
+
+    svgElement.addEventListener('wheel', handleWheel, { passive: false })
+
+    return () => {
+      svgElement.removeEventListener('wheel', handleWheel)
+    }
+  }, [])
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null
+      const tagName = target?.tagName ?? ''
+      const isEditable =
+        target?.isContentEditable ||
+        tagName === 'INPUT' ||
+        tagName === 'TEXTAREA' ||
+        tagName === 'BUTTON' ||
+        tagName === 'SELECT'
+
+      if (isEditable || event.code !== 'Space') {
+        return
+      }
+
+      event.preventDefault()
+
+      if (!spacePressedRef.current) {
+        spacePressedRef.current = true
+        setIsSpacePressed(true)
+      }
+    }
+
+    const handleKeyUp = (event: KeyboardEvent) => {
+      if (event.code !== 'Space') {
+        return
+      }
+
+      spacePressedRef.current = false
+      setIsSpacePressed(false)
+      stopPanning()
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    window.addEventListener('keyup', handleKeyUp)
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown)
+      window.removeEventListener('keyup', handleKeyUp)
+    }
+  }, [])
 
   return (
     <div className="panel">
@@ -325,7 +603,7 @@ export function Editor2D({
                       min="0"
                       step="0.1"
                       value={selectedHorizontalLoad?.magnitudeKn ?? 0}
-                      onChange={(event) => handleHorizontalMagnitudeChange(event.target.value)}
+                      onChange={(event) => horizontalMagnitudeChange(event.target.value)}
                     />
                     <span className="load-unit">kN</span>
                   </div>
@@ -361,7 +639,7 @@ export function Editor2D({
                       min="0"
                       step="0.1"
                       value={selectedVerticalLoad?.magnitudeKn ?? 0}
-                      onChange={(event) => handleVerticalMagnitudeChange(event.target.value)}
+                      onChange={(event) => verticalMagnitudeChange(event.target.value)}
                     />
                     <span className="load-unit">kN</span>
                   </div>
@@ -396,9 +674,75 @@ export function Editor2D({
             </div>
           ) : null}
 
+          <div className="editor-overlay editor-axis-overlay" aria-hidden="true">
+            <svg viewBox="0 0 124 56" className="editor-axis-diagram">
+              <line x1="18" y1="38" x2="88" y2="38" className="axis-line axis-line-x" />
+              <polygon points="96,38 84,33 84,43" className="axis-arrow-x" />
+              <line x1="18" y1="38" x2="18" y2="10" className="axis-line axis-line-z" />
+              <polygon points="18,2 13,14 23,14" className="axis-arrow-z" />
+              <text x="102" y="42" className="axis-label axis-label-x">
+                X
+              </text>
+              <text x="12" y="11" className="axis-label axis-label-z">
+                Z
+              </text>
+            </svg>
+            <span className="editor-axis-hint">Y axis points out of the screen. Snap: 0.1 m</span>
+          </div>
+
+          <div className="editor-overlay editor-viewport-hud" aria-label="Viewport controls">
+            <button
+              type="button"
+              className="tool-button viewport-button"
+              onClick={() =>
+                zoomAroundScreenPoint(viewport.zoom / ZOOM_STEP, {
+                  x: EDITOR_WIDTH / 2,
+                  y: EDITOR_HEIGHT / 2,
+                })
+              }
+              aria-label="Zoom out"
+              title="Zoom out"
+            >
+              −
+            </button>
+            <span className="viewport-zoom-readout">{Math.round(viewport.zoom * 100)}%</span>
+            <button
+              type="button"
+              className="tool-button viewport-button"
+              onClick={() =>
+                zoomAroundScreenPoint(viewport.zoom * ZOOM_STEP, {
+                  x: EDITOR_WIDTH / 2,
+                  y: EDITOR_HEIGHT / 2,
+                })
+              }
+              aria-label="Zoom in"
+              title="Zoom in"
+            >
+              +
+            </button>
+            <button
+              type="button"
+              className="tool-button viewport-fit-button"
+              onClick={fitViewportToModel}
+            >
+              Fit
+            </button>
+            <button
+              type="button"
+              className="tool-button viewport-fit-button"
+              onClick={resetViewport}
+            >
+              1:1
+            </button>
+          </div>
+
           <svg
-            className="editor-surface"
+            ref={svgRef}
+            className={`editor-surface${
+              isPanning ? ' is-panning' : isSpacePressed || activeTool === 'drag' ? ' is-pan-ready' : ''
+            }`}
             viewBox={`0 0 ${EDITOR_WIDTH} ${EDITOR_HEIGHT}`}
+            onMouseDown={handleCanvasMouseDown}
             onClick={handleCanvasClick}
             onMouseMove={handleMouseMove}
             onMouseUp={handleMouseUp}
@@ -429,170 +773,275 @@ export function Editor2D({
               </marker>
             </defs>
 
-            <rect x="0" y="0" width={EDITOR_WIDTH} height={EDITOR_HEIGHT} fill="transparent" />
-
-            <line
-              x1={AXIS_MARGIN}
-              y1={EDITOR_HEIGHT - AXIS_MARGIN}
-              x2={AXIS_MARGIN + 72}
-              y2={EDITOR_HEIGHT - AXIS_MARGIN}
-              className="axis-line axis-line-x"
-              markerEnd="url(#axis-arrow-x)"
-              pointerEvents="none"
+            <rect x="0" y="0" width={EDITOR_WIDTH} height={EDITOR_HEIGHT} className="editor-grid-background" />
+            <ViewportGrid
+              minX={visibleWorldBounds.minX}
+              maxX={visibleWorldBounds.maxX}
+              minY={visibleWorldBounds.minY}
+              maxY={visibleWorldBounds.maxY}
+              zoom={viewport.zoom}
+              panX={viewport.panX}
+              panY={viewport.panY}
             />
-            <line
-              x1={AXIS_MARGIN}
-              y1={EDITOR_HEIGHT - AXIS_MARGIN}
-              x2={AXIS_MARGIN}
-              y2={EDITOR_HEIGHT - AXIS_MARGIN - 72}
-              className="axis-line axis-line-z"
-              markerEnd="url(#axis-arrow-z)"
-              pointerEvents="none"
-            />
-            <text
-              x={AXIS_MARGIN + 84}
-              y={EDITOR_HEIGHT - AXIS_MARGIN + 5}
-              className="axis-label axis-label-x"
-            >
-              X
-            </text>
-            <text
-              x={AXIS_MARGIN - 4}
-              y={EDITOR_HEIGHT - AXIS_MARGIN - 84}
-              className="axis-label axis-label-z"
-            >
-              Z
-            </text>
-            <text x={AXIS_MARGIN} y={EDITOR_HEIGHT - AXIS_MARGIN + 26} className="axis-hint">
-              Y axis points out of the screen. Grid spacing: 0.1 m
-            </text>
 
-            {members.map((member) => {
-              const nodeA = nodes.find((node) => node.id === member.nodeAId)
-              const nodeB = nodes.find((node) => node.id === member.nodeBId)
+            <g transform={sceneTransform}>
+              {members.map((member) => {
+                const nodeA = nodeById.get(member.nodeAId)
+                const nodeB = nodeById.get(member.nodeBId)
 
-              if (!nodeA || !nodeB) {
-                return null
-              }
+                if (!nodeA || !nodeB) {
+                  return null
+                }
 
-              const lengthInMeters =
-                pixelsToMeters(Math.hypot(nodeB.x - nodeA.x, nodeB.y - nodeA.y))
-              const midX = (nodeA.x + nodeB.x) / 2
-              const midY = (nodeA.y + nodeB.y) / 2
+                const lengthInMeters =
+                  pixelsToMeters(Math.hypot(nodeB.x - nodeA.x, nodeB.y - nodeA.y))
+                const midX = (nodeA.x + nodeB.x) / 2
+                const midY = (nodeA.y + nodeB.y) / 2
 
-              return (
-                <g key={member.id}>
+                return (
+                  <g key={member.id}>
+                    <line
+                      x1={nodeA.x}
+                      y1={nodeA.y}
+                      x2={nodeB.x}
+                      y2={nodeB.y}
+                      className={getMemberClassName(member.id)}
+                      onClick={(event) => {
+                        if (shouldSuppressClick()) {
+                          event.stopPropagation()
+                          return
+                        }
+
+                        event.stopPropagation()
+                        onMemberClick(member.id)
+                      }}
+                      onContextMenu={(event) => {
+                        event.preventDefault()
+                        event.stopPropagation()
+                        onDeleteMember(member.id)
+                      }}
+                    />
+                    <text x={midX} y={midY - 10} className="member-length" textAnchor="middle">
+                      {lengthInMeters.toFixed(2)} m
+                    </text>
+                    {isStableAnalysis ? (
+                      <MemberForceLabel
+                        midX={midX}
+                        midY={midY}
+                        result={memberResultByMemberId.get(member.id)}
+                      />
+                    ) : null}
+                  </g>
+                )
+              })}
+
+              {isStableAnalysis && displacementDisplayScale > 0 ? (
+                <DisplacedShapeOverlay
+                  nodes={nodes}
+                  members={members}
+                  displacementByNodeId={displacementByNodeId}
+                  displayScale={displacementDisplayScale}
+                />
+              ) : null}
+
+              {memberStartNode &&
+              isPreviewVisible &&
+              previewPoint &&
+              previewMidpoint &&
+              previewLengthInMeters ? (
+                <g pointerEvents="none">
                   <line
-                    x1={nodeA.x}
-                    y1={nodeA.y}
-                    x2={nodeB.x}
-                    y2={nodeB.y}
-                    className={getMemberClassName(member.id)}
-                    onClick={(event) => {
+                    x1={memberStartNode.x}
+                    y1={memberStartNode.y}
+                    x2={previewPoint.x}
+                    y2={previewPoint.y}
+                    className="member-line member-line-preview"
+                  />
+                  <text
+                    x={previewMidpoint.x}
+                    y={previewMidpoint.y - 10}
+                    className="member-length"
+                    textAnchor="middle"
+                  >
+                    {previewLengthInMeters.toFixed(2)} m
+                  </text>
+                </g>
+              ) : null}
+
+              {nodes.map((node) => (
+                <g key={node.id}>
+                  <SupportSymbol node={node} />
+                  <NodeLoads node={node} />
+                  {isStableAnalysis ? (
+                    <ReactionOverlay node={node} reaction={reactionByNodeId.get(node.id)} />
+                  ) : null}
+                  <circle
+                    cx={node.x}
+                    cy={node.y}
+                    r={NODE_RADIUS}
+                    className={getNodeClassName(node.id)}
+                    onMouseDown={(event) => {
+                      if (event.button === 1 || (spacePressedRef.current && event.button === 0)) {
+                        return
+                      }
+
+                      if (activeTool !== 'select') {
+                        return
+                      }
+
+                      event.preventDefault()
                       event.stopPropagation()
-                      onMemberClick(member.id)
+                      onNodeClick(node.id)
+                      dragNodeIdRef.current = node.id
+                      dragMovedRef.current = false
+                    }}
+                    onClick={(event) => {
+                      if (shouldSuppressClick()) {
+                        event.stopPropagation()
+                        return
+                      }
+
+                      event.stopPropagation()
+
+                      if (dragMovedRef.current) {
+                        dragMovedRef.current = false
+                        return
+                      }
+
+                      onNodeClick(node.id)
                     }}
                     onContextMenu={(event) => {
                       event.preventDefault()
                       event.stopPropagation()
-                      onDeleteMember(member.id)
+                      onDeleteNode(node.id)
                     }}
                   />
-                  <text x={midX} y={midY - 10} className="member-length" textAnchor="middle">
-                    {lengthInMeters.toFixed(2)} m
-                  </text>
-                  {isStableAnalysis ? (
-                    <MemberForceLabel
-                      midX={midX}
-                      midY={midY}
-                      result={memberResultByMemberId.get(member.id)}
-                    />
-                  ) : null}
                 </g>
-              )
-            })}
-
-            {isStableAnalysis && displacementDisplayScale > 0 ? (
-              <DisplacedShapeOverlay
-                nodes={nodes}
-                members={members}
-                displacementByNodeId={displacementByNodeId}
-                displayScale={displacementDisplayScale}
-              />
-            ) : null}
-
-            {memberStartNode && isPreviewVisible && previewPoint && previewMidpoint && previewLengthInMeters ? (
-              <g pointerEvents="none">
-                <line
-                  x1={memberStartNode.x}
-                  y1={memberStartNode.y}
-                  x2={previewPoint.x}
-                  y2={previewPoint.y}
-                  className="member-line member-line-preview"
-                />
-                <text
-                  x={previewMidpoint.x}
-                  y={previewMidpoint.y - 10}
-                  className="member-length"
-                  textAnchor="middle"
-                >
-                  {previewLengthInMeters.toFixed(2)} m
-                </text>
-              </g>
-            ) : null}
-
-            {nodes.map((node) => (
-              <g key={node.id}>
-                <SupportSymbol node={node} />
-                <NodeLoads node={node} />
-                {isStableAnalysis ? (
-                  <ReactionOverlay node={node} reaction={reactionByNodeId.get(node.id)} />
-                ) : null}
-                <circle
-                  cx={node.x}
-                  cy={node.y}
-                  r={NODE_RADIUS}
-                  className={getNodeClassName(node.id)}
-                  onMouseDown={(event) => {
-                    if (activeTool !== 'select') {
-                      return
-                    }
-
-                    event.preventDefault()
-                    event.stopPropagation()
-                    onNodeClick(node.id)
-                    dragNodeIdRef.current = node.id
-                    dragMovedRef.current = false
-                  }}
-                  onClick={(event) => {
-                    event.stopPropagation()
-                    if (dragMovedRef.current) {
-                      dragMovedRef.current = false
-                      return
-                    }
-                    onNodeClick(node.id)
-                  }}
-                  onContextMenu={(event) => {
-                    event.preventDefault()
-                    event.stopPropagation()
-                    onDeleteNode(node.id)
-                  }}
-                />
-              </g>
-            ))}
+              ))}
+            </g>
           </svg>
         </div>
 
         <p className="editor-status-strip">
           {activeTool === 'member'
-            ? 'Member tool: click a start point on a node or empty space, then click the end point to create the member. Points snap to the 0.1 m grid.'
+            ? 'Member tool: click a start point on a node or empty space, then click the end point to create the member. Use the mouse wheel to zoom and middle-mouse or Space+drag to pan.'
             : activeTool === 'node'
-              ? 'Node tool: click anywhere in the 2D view to place a standalone node on the 0.1 m grid.'
-              : 'Select tool: click a node or member to select it, drag a node with 0.1 m snap, and press Delete or Backspace to remove the selected item.'}
+              ? 'Node tool: click anywhere in the 2D view to place a standalone node on the 0.1 m grid. Use the mouse wheel to zoom and middle-mouse or Space+drag to pan.'
+              : activeTool === 'drag'
+                ? 'Drag tool: click and drag to pan the 2D view. Use the mouse wheel to zoom, or middle-mouse and Space+drag as alternate pan gestures.'
+              : 'Select tool: click a node or member to select it, drag a node with 0.1 m snap, and press Delete or Backspace to remove the selected item. Use the mouse wheel to zoom and middle-mouse or Space+drag to pan.'}
         </p>
       </div>
     </div>
   )
+}
+
+function ViewportGrid({
+  minX,
+  maxX,
+  minY,
+  maxY,
+  zoom,
+  panX,
+  panY,
+}: {
+  minX: number
+  maxX: number
+  minY: number
+  maxY: number
+  zoom: number
+  panX: number
+  panY: number
+}) {
+  const gridLines: ReactElement[] = []
+  const showMinorLines = GRID_SIZE_PX * zoom >= 10
+  let majorMultiple = 5
+
+  while (GRID_SIZE_PX * majorMultiple * zoom < 56) {
+    majorMultiple *= 2
+  }
+
+  const majorStep = GRID_SIZE_PX * majorMultiple
+
+  if (showMinorLines) {
+    for (
+      let x = Math.floor(minX / GRID_SIZE_PX) * GRID_SIZE_PX;
+      x <= maxX + GRID_SIZE_PX;
+      x += GRID_SIZE_PX
+    ) {
+      if (Math.abs(x / majorStep - Math.round(x / majorStep)) < 0.001) {
+        continue
+      }
+
+      gridLines.push(
+        <line
+          key={`minor-x-${x}`}
+          x1={(x - panX) * zoom}
+          y1={0}
+          x2={(x - panX) * zoom}
+          y2={EDITOR_HEIGHT}
+          className="editor-grid-line editor-grid-line-minor"
+        />,
+      )
+    }
+
+    for (
+      let y = Math.floor(minY / GRID_SIZE_PX) * GRID_SIZE_PX;
+      y <= maxY + GRID_SIZE_PX;
+      y += GRID_SIZE_PX
+    ) {
+      if (Math.abs(y / majorStep - Math.round(y / majorStep)) < 0.001) {
+        continue
+      }
+
+      gridLines.push(
+        <line
+          key={`minor-y-${y}`}
+          x1={0}
+          y1={(y - panY) * zoom}
+          x2={EDITOR_WIDTH}
+          y2={(y - panY) * zoom}
+          className="editor-grid-line editor-grid-line-minor"
+        />,
+      )
+    }
+  }
+
+  for (
+    let x = Math.floor(minX / majorStep) * majorStep;
+    x <= maxX + majorStep;
+    x += majorStep
+  ) {
+    gridLines.push(
+      <line
+        key={`major-x-${x}`}
+        x1={(x - panX) * zoom}
+        y1={0}
+        x2={(x - panX) * zoom}
+        y2={EDITOR_HEIGHT}
+        className="editor-grid-line editor-grid-line-major"
+      />,
+    )
+  }
+
+  for (
+    let y = Math.floor(minY / majorStep) * majorStep;
+    y <= maxY + majorStep;
+    y += majorStep
+  ) {
+    gridLines.push(
+      <line
+        key={`major-y-${y}`}
+        x1={0}
+        y1={(y - panY) * zoom}
+        x2={EDITOR_WIDTH}
+        y2={(y - panY) * zoom}
+        className="editor-grid-line editor-grid-line-major"
+      />,
+    )
+  }
+
+  return <g pointerEvents="none">{gridLines}</g>
 }
 
 function ToolIcon({ tool }: { tool: EditorTool }) {
@@ -600,6 +1049,21 @@ function ToolIcon({ tool }: { tool: EditorTool }) {
     return (
       <svg viewBox="0 0 24 24" className="tool-icon" aria-hidden="true">
         <path d="M6 4 L16 14 L11.2 14.2 L13.4 20 L10.5 21 L8.4 15.1 L5 18 Z" />
+      </svg>
+    )
+  }
+
+  if (tool === 'drag') {
+    return (
+      <svg viewBox="0 0 24 24" className="tool-icon" aria-hidden="true">
+        <path d="M12 3 V11" />
+        <path d="M8.5 6.5 L12 3 L15.5 6.5" />
+        <path d="M12 11 V19" />
+        <path d="M8.5 17.5 L12 21 L15.5 17.5" />
+        <path d="M5 12 H13" />
+        <path d="M8.5 8.5 L5 12 L8.5 15.5" />
+        <path d="M13 12 H21" />
+        <path d="M17.5 8.5 L21 12 L17.5 15.5" />
       </svg>
     )
   }
@@ -771,11 +1235,7 @@ function NodeLoads({ node }: { node: Node2D }) {
           }
           className="load-arrow-head"
         />
-        <text
-          x={offsetX + 10}
-          y={(node.y + endY) / 2 - 6}
-          className="load-label-text"
-        >
+        <text x={offsetX + 10} y={(node.y + endY) / 2 - 6} className="load-label-text">
           {node.verticalLoad.magnitudeKn.toFixed(1)} kN
         </text>
       </g>,
@@ -880,7 +1340,11 @@ function ReactionOverlay({
         <DirectionalResultArrow
           startX={node.x}
           startY={node.y - 18}
-          dx={reaction.xKn > 0 ? clampArrowLength(Math.abs(reaction.xKn)) : -clampArrowLength(Math.abs(reaction.xKn))}
+          dx={
+            reaction.xKn > 0
+              ? clampArrowLength(Math.abs(reaction.xKn))
+              : -clampArrowLength(Math.abs(reaction.xKn))
+          }
           dy={0}
           label={formatSignedKn(reaction.xKn)}
           labelDx={0}
@@ -892,7 +1356,11 @@ function ReactionOverlay({
           startX={node.x + 18}
           startY={node.y}
           dx={0}
-          dy={reaction.zKn > 0 ? -clampArrowLength(Math.abs(reaction.zKn)) : clampArrowLength(Math.abs(reaction.zKn))}
+          dy={
+            reaction.zKn > 0
+              ? -clampArrowLength(Math.abs(reaction.zKn))
+              : clampArrowLength(Math.abs(reaction.zKn))
+          }
           label={formatSignedKn(reaction.zKn)}
           labelDx={10}
           labelDy={-4}
@@ -958,6 +1426,32 @@ function getArrowHeadPoints(endX: number, endY: number, dx: number, dy: number) 
   return dy >= 0
     ? `${endX},${endY} ${endX - 5},${endY - 10} ${endX + 5},${endY - 10}`
     : `${endX},${endY} ${endX - 5},${endY + 10} ${endX + 5},${endY + 10}`
+}
+
+function clampZoom(value: number) {
+  return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, value))
+}
+
+function getAutoPanDelta(screenPoint: Point, zoom: number) {
+  let screenDx = 0
+  let screenDy = 0
+
+  if (screenPoint.x < AUTO_PAN_EDGE_PX) {
+    screenDx = -Math.min(AUTO_PAN_SPEED_PX, AUTO_PAN_EDGE_PX - screenPoint.x)
+  } else if (screenPoint.x > EDITOR_WIDTH - AUTO_PAN_EDGE_PX) {
+    screenDx = Math.min(AUTO_PAN_SPEED_PX, screenPoint.x - (EDITOR_WIDTH - AUTO_PAN_EDGE_PX))
+  }
+
+  if (screenPoint.y < AUTO_PAN_EDGE_PX) {
+    screenDy = -Math.min(AUTO_PAN_SPEED_PX, AUTO_PAN_EDGE_PX - screenPoint.y)
+  } else if (screenPoint.y > EDITOR_HEIGHT - AUTO_PAN_EDGE_PX) {
+    screenDy = Math.min(AUTO_PAN_SPEED_PX, screenPoint.y - (EDITOR_HEIGHT - AUTO_PAN_EDGE_PX))
+  }
+
+  return {
+    x: screenDx / zoom,
+    y: screenDy / zoom,
+  }
 }
 
 function formatSignedKn(value: number) {

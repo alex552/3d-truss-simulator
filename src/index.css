@@ -161,6 +161,7 @@ button {
   width: 100%;
   aspect-ratio: 1 / 1;
   overflow: hidden;
+  overscroll-behavior: contain;
   background:
     radial-gradient(circle at top left, rgba(148, 163, 184, 0.12), transparent 30%),
     linear-gradient(180deg, rgba(255, 255, 255, 0.7), rgba(241, 245, 249, 0.58));
@@ -231,6 +232,66 @@ button {
   background: rgba(255, 255, 255, 0.9);
   backdrop-filter: blur(16px);
   box-shadow: 0 16px 32px rgba(15, 23, 42, 0.14);
+}
+
+.editor-axis-overlay {
+  left: 28px;
+  bottom: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  pointer-events: none;
+}
+
+.editor-axis-diagram {
+  width: 124px;
+  height: 56px;
+}
+
+.editor-axis-hint {
+  color: #475569;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.editor-viewport-hud {
+  right: 24px;
+  bottom: 24px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid rgba(203, 213, 225, 0.85);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.86);
+  backdrop-filter: blur(14px);
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.12);
+}
+
+.viewport-button {
+  min-width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: 10px;
+  font-size: 20px;
+  line-height: 1;
+}
+
+.viewport-fit-button {
+  min-width: 44px;
+  height: 36px;
+  padding: 0 10px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.viewport-zoom-readout {
+  min-width: 56px;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
 }
 
 .inspector-header {
@@ -327,15 +388,47 @@ button {
   border-radius: 18px;
   border: 1px solid rgba(148, 163, 184, 0.32);
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.32);
-  background:
-    linear-gradient(0deg, rgba(47, 111, 237, 0.04), rgba(47, 111, 237, 0.04)),
-    linear-gradient(90deg, rgba(47, 111, 237, 0.08) 1px, transparent 1px),
-    linear-gradient(rgba(47, 111, 237, 0.08) 1px, transparent 1px);
-  background-size: 100% 100%, 32px 32px, 32px 32px;
+  background: transparent;
   cursor: crosshair;
   user-select: none;
   -webkit-user-select: none;
   touch-action: none;
+}
+
+.editor-surface.is-pan-ready {
+  cursor: grab;
+}
+
+.editor-surface.is-panning {
+  cursor: grabbing;
+}
+
+.editor-surface.is-pan-ready .node-circle,
+.editor-surface.is-pan-ready .member-line {
+  cursor: grab;
+}
+
+.editor-surface.is-panning .node-circle,
+.editor-surface.is-panning .member-line {
+  cursor: grabbing;
+}
+
+.editor-grid-background {
+  fill: rgba(47, 111, 237, 0.04);
+}
+
+.editor-grid-line {
+  vector-effect: non-scaling-stroke;
+}
+
+.editor-grid-line-minor {
+  stroke: rgba(47, 111, 237, 0.12);
+  stroke-width: 1;
+}
+
+.editor-grid-line-major {
+  stroke: rgba(47, 111, 237, 0.22);
+  stroke-width: 1;
 }
 
 .member-line {
@@ -381,12 +474,6 @@ button {
 
 .axis-label-z {
   fill: #1971c2;
-}
-
-.axis-hint {
-  fill: #4a5568;
-  font-size: 12px;
-  font-weight: 500;
 }
 
 .member-length {
@@ -702,6 +789,27 @@ button {
     right: 18px;
     width: min(280px, calc(100% - 98px));
     padding: 12px;
+  }
+
+  .editor-axis-overlay {
+    left: 20px;
+    bottom: 18px;
+  }
+
+  .editor-viewport-hud {
+    right: 18px;
+    bottom: 18px;
+    gap: 6px;
+    padding: 8px 10px;
+  }
+
+  .viewport-button,
+  .viewport-fit-button {
+    height: 34px;
+  }
+
+  .viewport-zoom-readout {
+    min-width: 48px;
   }
 
   .load-editor-group {
