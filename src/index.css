@@ -89,6 +89,11 @@ button {
   cursor: pointer;
 }
 
+.tool-button:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(47, 111, 237, 0.18);
+}
+
 .tool-button.is-active {
   border-color: #2f6fed;
   background: #2f6fed;
@@ -103,63 +108,18 @@ button {
 .editor-header {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-}
-
-.editor-toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  align-items: center;
-}
-
-.tool-group {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  padding-right: 10px;
-  margin-right: 4px;
-  border-right: 1px solid #e2e8f0;
-}
-
-.tool-group:last-child {
-  border-right: none;
-  padding-right: 0;
-  margin-right: 0;
-}
-
-.tool-group-supports {
-  padding-left: 2px;
-}
-
-.node-properties {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  align-items: flex-start;
-}
-
-.member-properties {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  align-items: center;
-}
-
-.load-editor-group {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
+  gap: 6px;
 }
 
 .load-editor {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 8px;
+  padding: 8px 10px;
   border: 1px solid #e2e8f0;
-  border-radius: 10px;
-  background: white;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(10px);
 }
 
 .load-label,
@@ -186,9 +146,172 @@ button {
   width: 120px;
 }
 
-.editor-help {
+.editor-subtitle {
   margin: 0;
   color: #4a5568;
+}
+
+.editor-layout {
+  display: flex;
+  flex-direction: column;
+}
+
+.editor-canvas-shell {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at top left, rgba(148, 163, 184, 0.12), transparent 30%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.7), rgba(241, 245, 249, 0.58));
+}
+
+.editor-overlay {
+  position: absolute;
+  z-index: 2;
+}
+
+.editor-tool-rail {
+  top: 34px;
+  left: 30px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid rgba(148, 163, 184, 0.42);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.84);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.12);
+}
+
+.cad-tool-button,
+.support-chip,
+.direction-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cad-tool-button {
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.94);
+}
+
+.cad-tool-button:hover,
+.support-chip:hover,
+.direction-button:hover {
+  border-color: #94a3b8;
+  background: #f8fafc;
+}
+
+.tool-icon {
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.editor-inspector {
+  top: 24px;
+  right: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: min(320px, calc(100% - 118px));
+  padding: 14px;
+  border: 1px solid rgba(203, 213, 225, 0.9);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(16px);
+  box-shadow: 0 16px 32px rgba(15, 23, 42, 0.14);
+}
+
+.inspector-header {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.inspector-eyebrow {
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.inspector-title {
+  color: #0f172a;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.node-properties {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.member-properties {
+  display: flex;
+}
+
+.inspector-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.inspector-label {
+  color: #475569;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.support-chip-group,
+.load-editor-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.support-chip {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.92);
+  padding: 0;
+}
+
+.support-icon {
+  width: 20px;
+  height: 20px;
+}
+
+.direction-button {
+  min-width: 34px;
+  height: 34px;
+  padding: 0 10px;
+  font-size: 15px;
+  font-weight: 700;
+  border-radius: 9px;
+}
+
+.editor-status-strip {
+  margin: 0;
+  padding: 14px 18px 18px;
+  border-top: 1px solid #edf2f7;
+  color: #475569;
+  font-size: 13px;
+  line-height: 1.5;
+  background: rgba(248, 250, 252, 0.72);
 }
 
 .editor-surface,
@@ -199,6 +322,11 @@ button {
 
 .editor-surface {
   display: block;
+  position: relative;
+  z-index: 1;
+  border-radius: 18px;
+  border: 1px solid rgba(148, 163, 184, 0.32);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.32);
   background:
     linear-gradient(0deg, rgba(47, 111, 237, 0.04), rgba(47, 111, 237, 0.04)),
     linear-gradient(90deg, rgba(47, 111, 237, 0.08) 1px, transparent 1px),
@@ -553,9 +681,46 @@ button {
     flex-direction: column;
   }
 
-  .tool-group {
-    border-right: none;
-    padding-right: 0;
-    margin-right: 0;
+  .editor-canvas-shell {
+    overflow: hidden;
+  }
+
+  .editor-tool-rail {
+    top: 26px;
+    left: 22px;
+    gap: 8px;
+    padding: 8px;
+  }
+
+  .cad-tool-button {
+    width: 40px;
+    height: 40px;
+  }
+
+  .editor-inspector {
+    top: 18px;
+    right: 18px;
+    width: min(280px, calc(100% - 98px));
+    padding: 12px;
+  }
+
+  .load-editor-group {
+    flex-direction: column;
+  }
+
+  .member-properties {
+    width: 100%;
+  }
+
+  .member-properties .load-editor {
+    width: 100%;
+  }
+
+  .member-stiffness-input {
+    width: 100%;
+  }
+
+  .editor-status-strip {
+    padding: 12px 16px 16px;
   }
 }

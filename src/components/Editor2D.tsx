@@ -51,16 +51,16 @@ type Editor2DProps = {
 
 const NODE_RADIUS = 8
 const AXIS_MARGIN = 28
-const TOOL_OPTIONS: { value: EditorTool; label: string }[] = [
-  { value: 'select', label: 'Select' },
-  { value: 'node', label: 'Node' },
-  { value: 'member', label: 'Member' },
+const TOOL_OPTIONS: { value: EditorTool; label: string; title: string }[] = [
+  { value: 'select', label: 'Select tool', title: 'Select' },
+  { value: 'node', label: 'Node tool', title: 'Place node' },
+  { value: 'member', label: 'Member tool', title: 'Draw member' },
 ]
-const SUPPORT_OPTIONS: { value: SupportType | undefined; label: string }[] = [
-  { value: undefined, label: 'None' },
-  { value: 'pinned', label: 'Pinned' },
-  { value: 'roller-x', label: 'Roller X' },
-  { value: 'roller-z', label: 'Roller Z' },
+const SUPPORT_OPTIONS: { value: SupportType | undefined; label: string; title: string }[] = [
+  { value: undefined, label: 'No support', title: 'None' },
+  { value: 'pinned', label: 'Pinned support', title: 'Pinned' },
+  { value: 'roller-x', label: 'Roller X support', title: 'Roller X' },
+  { value: 'roller-z', label: 'Roller Z support', title: 'Roller Z' },
 ]
 
 export function Editor2D({
@@ -235,133 +235,355 @@ export function Editor2D({
   return (
     <div className="panel">
       <div className="panel-header editor-header">
-        <div className="editor-toolbar" aria-label="2D editor toolbar">
-          <div className="tool-group">
+        <h2>2D Editor</h2>
+        <p className="editor-subtitle">
+          CAD-style drafting in the X/Z plane with live 3D mirroring.
+        </p>
+      </div>
+
+      <div className="editor-layout">
+        <div className="editor-canvas-shell">
+          <div className="editor-overlay editor-tool-rail" aria-label="2D editor toolbar">
             {TOOL_OPTIONS.map((tool) => (
               <button
                 key={tool.value}
                 type="button"
-                className={activeTool === tool.value ? 'tool-button is-active' : 'tool-button'}
+                className={
+                  activeTool === tool.value
+                    ? 'tool-button cad-tool-button is-active'
+                    : 'tool-button cad-tool-button'
+                }
                 onClick={() => onSetActiveTool(tool.value)}
+                aria-label={tool.label}
+                title={tool.title}
               >
-                {tool.label}
+                <ToolIcon tool={tool.value} />
               </button>
             ))}
           </div>
 
           {selectedNode ? (
-            <div className="node-properties" aria-label="Selected node properties">
-              <div className="tool-group tool-group-supports" aria-label="Selected node supports">
-                {SUPPORT_OPTIONS.map((option) => (
-                  <button
-                    key={option.label}
-                    type="button"
-                    className={
-                      selectedNodeSupport === option.value ||
-                      (selectedNodeSupport === undefined && option.value === undefined)
-                        ? 'tool-button is-active'
-                        : 'tool-button'
-                    }
-                    onClick={() => onSetSelectedNodeSupport(option.value)}
-                  >
-                    {option.label}
-                  </button>
-                ))}
+            <div className="editor-overlay editor-inspector" aria-label="Selected node properties">
+              <div className="inspector-header">
+                <span className="inspector-eyebrow">Node</span>
+                <span className="inspector-title">Selected node</span>
               </div>
 
-              <div className="load-editor-group" aria-label="Node loads">
-                <div className="load-editor">
-                  <span className="load-label">H</span>
-                  <div className="direction-toggle">
-                    {horizontalDirectionOptions.map((direction) => (
+              <div className="node-properties">
+                <div className="inspector-section" aria-label="Selected node supports">
+                  <span className="inspector-label">Support</span>
+                  <div className="support-chip-group">
+                    {SUPPORT_OPTIONS.map((option) => (
                       <button
-                        key={direction}
+                        key={option.title}
                         type="button"
                         className={
-                          (selectedHorizontalLoad?.direction ?? 'right') === direction
-                            ? 'tool-button is-active'
-                            : 'tool-button'
+                          selectedNodeSupport === option.value ||
+                          (selectedNodeSupport === undefined && option.value === undefined)
+                            ? 'tool-button support-chip is-active'
+                            : 'tool-button support-chip'
                         }
-                        onClick={() =>
-                          onSetSelectedNodeHorizontalLoad(
-                            selectedHorizontalLoad?.magnitudeKn ?? 0,
-                            direction,
-                          )
-                        }
+                        onClick={() => onSetSelectedNodeSupport(option.value)}
+                        aria-label={option.label}
+                        title={option.title}
                       >
-                        {direction === 'left' ? '←' : '→'}
+                        <SupportChipIcon support={option.value} />
                       </button>
                     ))}
                   </div>
-                  <input
-                    className="load-input"
-                    type="number"
-                    min="0"
-                    step="0.1"
-                    value={selectedHorizontalLoad?.magnitudeKn ?? 0}
-                    onChange={(event) => handleHorizontalMagnitudeChange(event.target.value)}
-                  />
-                  <span className="load-unit">kN</span>
                 </div>
 
-                <div className="load-editor">
-                  <span className="load-label">V</span>
-                  <div className="direction-toggle">
-                    {verticalDirectionOptions.map((direction) => (
-                      <button
-                        key={direction}
-                        type="button"
-                        className={
-                          (selectedVerticalLoad?.direction ?? 'down') === direction
-                            ? 'tool-button is-active'
-                            : 'tool-button'
-                        }
-                        onClick={() =>
-                          onSetSelectedNodeVerticalLoad(
-                            selectedVerticalLoad?.magnitudeKn ?? 0,
-                            direction,
-                          )
-                        }
-                      >
-                        {direction === 'up' ? '↑' : '↓'}
-                      </button>
-                    ))}
+                <div className="load-editor-group" aria-label="Node loads">
+                  <div className="load-editor">
+                    <span className="load-label">H</span>
+                    <div className="direction-toggle">
+                      {horizontalDirectionOptions.map((direction) => (
+                        <button
+                          key={direction}
+                          type="button"
+                          className={
+                            (selectedHorizontalLoad?.direction ?? 'right') === direction
+                              ? 'tool-button direction-button is-active'
+                              : 'tool-button direction-button'
+                          }
+                          onClick={() =>
+                            onSetSelectedNodeHorizontalLoad(
+                              selectedHorizontalLoad?.magnitudeKn ?? 0,
+                              direction,
+                            )
+                          }
+                          aria-label={`Horizontal load ${direction}`}
+                          title={`Horizontal ${direction}`}
+                        >
+                          {direction === 'left' ? '←' : '→'}
+                        </button>
+                      ))}
+                    </div>
+                    <input
+                      className="load-input"
+                      type="number"
+                      min="0"
+                      step="0.1"
+                      value={selectedHorizontalLoad?.magnitudeKn ?? 0}
+                      onChange={(event) => handleHorizontalMagnitudeChange(event.target.value)}
+                    />
+                    <span className="load-unit">kN</span>
                   </div>
-                  <input
-                    className="load-input"
-                    type="number"
-                    min="0"
-                    step="0.1"
-                    value={selectedVerticalLoad?.magnitudeKn ?? 0}
-                    onChange={(event) => handleVerticalMagnitudeChange(event.target.value)}
-                  />
-                  <span className="load-unit">kN</span>
+
+                  <div className="load-editor">
+                    <span className="load-label">V</span>
+                    <div className="direction-toggle">
+                      {verticalDirectionOptions.map((direction) => (
+                        <button
+                          key={direction}
+                          type="button"
+                          className={
+                            (selectedVerticalLoad?.direction ?? 'down') === direction
+                              ? 'tool-button direction-button is-active'
+                              : 'tool-button direction-button'
+                          }
+                          onClick={() =>
+                            onSetSelectedNodeVerticalLoad(
+                              selectedVerticalLoad?.magnitudeKn ?? 0,
+                              direction,
+                            )
+                          }
+                          aria-label={`Vertical load ${direction}`}
+                          title={`Vertical ${direction}`}
+                        >
+                          {direction === 'up' ? '↑' : '↓'}
+                        </button>
+                      ))}
+                    </div>
+                    <input
+                      className="load-input"
+                      type="number"
+                      min="0"
+                      step="0.1"
+                      value={selectedVerticalLoad?.magnitudeKn ?? 0}
+                      onChange={(event) => handleVerticalMagnitudeChange(event.target.value)}
+                    />
+                    <span className="load-unit">kN</span>
+                  </div>
                 </div>
               </div>
             </div>
           ) : selectedMember ? (
-            <div className="member-properties" aria-label="Selected member properties">
-              <div className="load-editor">
-                <span className="load-label">EA</span>
-                <input
-                  className="load-input member-stiffness-input"
-                  type="number"
-                  min="1"
-                  step="1000"
-                  value={selectedMember.axialStiffnessKn}
-                  onChange={(event) =>
-                    onSetSelectedMemberAxialStiffness(
-                      Math.max(1, Number(event.target.value) || selectedMember.axialStiffnessKn),
-                    )
-                  }
-                />
-                <span className="load-unit">kN</span>
+            <div className="editor-overlay editor-inspector" aria-label="Selected member properties">
+              <div className="inspector-header">
+                <span className="inspector-eyebrow">Member</span>
+                <span className="inspector-title">Selected member</span>
+              </div>
+
+              <div className="member-properties">
+                <div className="load-editor">
+                  <span className="load-label">EA</span>
+                  <input
+                    className="load-input member-stiffness-input"
+                    type="number"
+                    min="1"
+                    step="1000"
+                    value={selectedMember.axialStiffnessKn}
+                    onChange={(event) =>
+                      onSetSelectedMemberAxialStiffness(
+                        Math.max(1, Number(event.target.value) || selectedMember.axialStiffnessKn),
+                      )
+                    }
+                  />
+                  <span className="load-unit">kN</span>
+                </div>
               </div>
             </div>
           ) : null}
+
+          <svg
+            className="editor-surface"
+            viewBox={`0 0 ${EDITOR_WIDTH} ${EDITOR_HEIGHT}`}
+            onClick={handleCanvasClick}
+            onMouseMove={handleMouseMove}
+            onMouseUp={handleMouseUp}
+            onMouseLeave={handleMouseUp}
+            role="img"
+            aria-label="2D truss editor"
+          >
+            <defs>
+              <marker
+                id="axis-arrow-x"
+                markerWidth="8"
+                markerHeight="8"
+                refX="6"
+                refY="4"
+                orient="auto"
+              >
+                <path d="M 0 0 L 8 4 L 0 8 z" className="axis-arrow-x" />
+              </marker>
+              <marker
+                id="axis-arrow-z"
+                markerWidth="8"
+                markerHeight="8"
+                refX="6"
+                refY="4"
+                orient="auto"
+              >
+                <path d="M 0 0 L 8 4 L 0 8 z" className="axis-arrow-z" />
+              </marker>
+            </defs>
+
+            <rect x="0" y="0" width={EDITOR_WIDTH} height={EDITOR_HEIGHT} fill="transparent" />
+
+            <line
+              x1={AXIS_MARGIN}
+              y1={EDITOR_HEIGHT - AXIS_MARGIN}
+              x2={AXIS_MARGIN + 72}
+              y2={EDITOR_HEIGHT - AXIS_MARGIN}
+              className="axis-line axis-line-x"
+              markerEnd="url(#axis-arrow-x)"
+              pointerEvents="none"
+            />
+            <line
+              x1={AXIS_MARGIN}
+              y1={EDITOR_HEIGHT - AXIS_MARGIN}
+              x2={AXIS_MARGIN}
+              y2={EDITOR_HEIGHT - AXIS_MARGIN - 72}
+              className="axis-line axis-line-z"
+              markerEnd="url(#axis-arrow-z)"
+              pointerEvents="none"
+            />
+            <text
+              x={AXIS_MARGIN + 84}
+              y={EDITOR_HEIGHT - AXIS_MARGIN + 5}
+              className="axis-label axis-label-x"
+            >
+              X
+            </text>
+            <text
+              x={AXIS_MARGIN - 4}
+              y={EDITOR_HEIGHT - AXIS_MARGIN - 84}
+              className="axis-label axis-label-z"
+            >
+              Z
+            </text>
+            <text x={AXIS_MARGIN} y={EDITOR_HEIGHT - AXIS_MARGIN + 26} className="axis-hint">
+              Y axis points out of the screen. Grid spacing: 0.1 m
+            </text>
+
+            {members.map((member) => {
+              const nodeA = nodes.find((node) => node.id === member.nodeAId)
+              const nodeB = nodes.find((node) => node.id === member.nodeBId)
+
+              if (!nodeA || !nodeB) {
+                return null
+              }
+
+              const lengthInMeters =
+                pixelsToMeters(Math.hypot(nodeB.x - nodeA.x, nodeB.y - nodeA.y))
+              const midX = (nodeA.x + nodeB.x) / 2
+              const midY = (nodeA.y + nodeB.y) / 2
+
+              return (
+                <g key={member.id}>
+                  <line
+                    x1={nodeA.x}
+                    y1={nodeA.y}
+                    x2={nodeB.x}
+                    y2={nodeB.y}
+                    className={getMemberClassName(member.id)}
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      onMemberClick(member.id)
+                    }}
+                    onContextMenu={(event) => {
+                      event.preventDefault()
+                      event.stopPropagation()
+                      onDeleteMember(member.id)
+                    }}
+                  />
+                  <text x={midX} y={midY - 10} className="member-length" textAnchor="middle">
+                    {lengthInMeters.toFixed(2)} m
+                  </text>
+                  {isStableAnalysis ? (
+                    <MemberForceLabel
+                      midX={midX}
+                      midY={midY}
+                      result={memberResultByMemberId.get(member.id)}
+                    />
+                  ) : null}
+                </g>
+              )
+            })}
+
+            {isStableAnalysis && displacementDisplayScale > 0 ? (
+              <DisplacedShapeOverlay
+                nodes={nodes}
+                members={members}
+                displacementByNodeId={displacementByNodeId}
+                displayScale={displacementDisplayScale}
+              />
+            ) : null}
+
+            {memberStartNode && isPreviewVisible && previewPoint && previewMidpoint && previewLengthInMeters ? (
+              <g pointerEvents="none">
+                <line
+                  x1={memberStartNode.x}
+                  y1={memberStartNode.y}
+                  x2={previewPoint.x}
+                  y2={previewPoint.y}
+                  className="member-line member-line-preview"
+                />
+                <text
+                  x={previewMidpoint.x}
+                  y={previewMidpoint.y - 10}
+                  className="member-length"
+                  textAnchor="middle"
+                >
+                  {previewLengthInMeters.toFixed(2)} m
+                </text>
+              </g>
+            ) : null}
+
+            {nodes.map((node) => (
+              <g key={node.id}>
+                <SupportSymbol node={node} />
+                <NodeLoads node={node} />
+                {isStableAnalysis ? (
+                  <ReactionOverlay node={node} reaction={reactionByNodeId.get(node.id)} />
+                ) : null}
+                <circle
+                  cx={node.x}
+                  cy={node.y}
+                  r={NODE_RADIUS}
+                  className={getNodeClassName(node.id)}
+                  onMouseDown={(event) => {
+                    if (activeTool !== 'select') {
+                      return
+                    }
+
+                    event.preventDefault()
+                    event.stopPropagation()
+                    onNodeClick(node.id)
+                    dragNodeIdRef.current = node.id
+                    dragMovedRef.current = false
+                  }}
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    if (dragMovedRef.current) {
+                      dragMovedRef.current = false
+                      return
+                    }
+                    onNodeClick(node.id)
+                  }}
+                  onContextMenu={(event) => {
+                    event.preventDefault()
+                    event.stopPropagation()
+                    onDeleteNode(node.id)
+                  }}
+                />
+              </g>
+            ))}
+          </svg>
         </div>
 
-        <p className="editor-help">
+        <p className="editor-status-strip">
           {activeTool === 'member'
             ? 'Member tool: click a start point on a node or empty space, then click the end point to create the member. Points snap to the 0.1 m grid.'
             : activeTool === 'node'
@@ -369,193 +591,76 @@ export function Editor2D({
               : 'Select tool: click a node or member to select it, drag a node with 0.1 m snap, and press Delete or Backspace to remove the selected item.'}
         </p>
       </div>
-
-      <svg
-        className="editor-surface"
-        viewBox={`0 0 ${EDITOR_WIDTH} ${EDITOR_HEIGHT}`}
-        onClick={handleCanvasClick}
-        onMouseMove={handleMouseMove}
-        onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseUp}
-        role="img"
-        aria-label="2D truss editor"
-      >
-        <defs>
-          <marker
-            id="axis-arrow-x"
-            markerWidth="8"
-            markerHeight="8"
-            refX="6"
-            refY="4"
-            orient="auto"
-          >
-            <path d="M 0 0 L 8 4 L 0 8 z" className="axis-arrow-x" />
-          </marker>
-          <marker
-            id="axis-arrow-z"
-            markerWidth="8"
-            markerHeight="8"
-            refX="6"
-            refY="4"
-            orient="auto"
-          >
-            <path d="M 0 0 L 8 4 L 0 8 z" className="axis-arrow-z" />
-          </marker>
-        </defs>
-
-        <rect x="0" y="0" width={EDITOR_WIDTH} height={EDITOR_HEIGHT} fill="transparent" />
-
-        <line
-          x1={AXIS_MARGIN}
-          y1={EDITOR_HEIGHT - AXIS_MARGIN}
-          x2={AXIS_MARGIN + 72}
-          y2={EDITOR_HEIGHT - AXIS_MARGIN}
-          className="axis-line axis-line-x"
-          markerEnd="url(#axis-arrow-x)"
-          pointerEvents="none"
-        />
-        <line
-          x1={AXIS_MARGIN}
-          y1={EDITOR_HEIGHT - AXIS_MARGIN}
-          x2={AXIS_MARGIN}
-          y2={EDITOR_HEIGHT - AXIS_MARGIN - 72}
-          className="axis-line axis-line-z"
-          markerEnd="url(#axis-arrow-z)"
-          pointerEvents="none"
-        />
-        <text
-          x={AXIS_MARGIN + 84}
-          y={EDITOR_HEIGHT - AXIS_MARGIN + 5}
-          className="axis-label axis-label-x"
-        >
-          X
-        </text>
-        <text
-          x={AXIS_MARGIN - 4}
-          y={EDITOR_HEIGHT - AXIS_MARGIN - 84}
-          className="axis-label axis-label-z"
-        >
-          Z
-        </text>
-        <text x={AXIS_MARGIN} y={EDITOR_HEIGHT - AXIS_MARGIN + 26} className="axis-hint">
-          Y axis points out of the screen. Grid spacing: 0.1 m
-        </text>
-
-        {members.map((member) => {
-          const nodeA = nodes.find((node) => node.id === member.nodeAId)
-          const nodeB = nodes.find((node) => node.id === member.nodeBId)
-
-          if (!nodeA || !nodeB) {
-            return null
-          }
-
-          const lengthInMeters =
-            pixelsToMeters(Math.hypot(nodeB.x - nodeA.x, nodeB.y - nodeA.y))
-          const midX = (nodeA.x + nodeB.x) / 2
-          const midY = (nodeA.y + nodeB.y) / 2
-
-          return (
-            <g key={member.id}>
-              <line
-                x1={nodeA.x}
-                y1={nodeA.y}
-                x2={nodeB.x}
-                y2={nodeB.y}
-                className={getMemberClassName(member.id)}
-                onClick={(event) => {
-                  event.stopPropagation()
-                  onMemberClick(member.id)
-                }}
-                onContextMenu={(event) => {
-                  event.preventDefault()
-                  event.stopPropagation()
-                  onDeleteMember(member.id)
-                }}
-              />
-              <text x={midX} y={midY - 10} className="member-length" textAnchor="middle">
-                {lengthInMeters.toFixed(2)} m
-              </text>
-              {isStableAnalysis ? (
-                <MemberForceLabel
-                  midX={midX}
-                  midY={midY}
-                  result={memberResultByMemberId.get(member.id)}
-                />
-              ) : null}
-            </g>
-          )
-        })}
-
-        {isStableAnalysis && displacementDisplayScale > 0 ? (
-          <DisplacedShapeOverlay
-            nodes={nodes}
-            members={members}
-            displacementByNodeId={displacementByNodeId}
-            displayScale={displacementDisplayScale}
-          />
-        ) : null}
-
-        {memberStartNode && isPreviewVisible && previewPoint && previewMidpoint && previewLengthInMeters ? (
-          <g pointerEvents="none">
-            <line
-              x1={memberStartNode.x}
-              y1={memberStartNode.y}
-              x2={previewPoint.x}
-              y2={previewPoint.y}
-              className="member-line member-line-preview"
-            />
-            <text
-              x={previewMidpoint.x}
-              y={previewMidpoint.y - 10}
-              className="member-length"
-              textAnchor="middle"
-            >
-              {previewLengthInMeters.toFixed(2)} m
-            </text>
-          </g>
-        ) : null}
-
-        {nodes.map((node) => (
-          <g key={node.id}>
-            <SupportSymbol node={node} />
-            <NodeLoads node={node} />
-            {isStableAnalysis ? (
-              <ReactionOverlay node={node} reaction={reactionByNodeId.get(node.id)} />
-            ) : null}
-            <circle
-              cx={node.x}
-              cy={node.y}
-              r={NODE_RADIUS}
-              className={getNodeClassName(node.id)}
-              onMouseDown={(event) => {
-                if (activeTool !== 'select') {
-                  return
-                }
-
-                event.preventDefault()
-                event.stopPropagation()
-                onNodeClick(node.id)
-                dragNodeIdRef.current = node.id
-                dragMovedRef.current = false
-              }}
-              onClick={(event) => {
-                event.stopPropagation()
-                if (dragMovedRef.current) {
-                  dragMovedRef.current = false
-                  return
-                }
-                onNodeClick(node.id)
-              }}
-              onContextMenu={(event) => {
-                event.preventDefault()
-                event.stopPropagation()
-                onDeleteNode(node.id)
-              }}
-            />
-          </g>
-        ))}
-      </svg>
     </div>
+  )
+}
+
+function ToolIcon({ tool }: { tool: EditorTool }) {
+  if (tool === 'select') {
+    return (
+      <svg viewBox="0 0 24 24" className="tool-icon" aria-hidden="true">
+        <path d="M6 4 L16 14 L11.2 14.2 L13.4 20 L10.5 21 L8.4 15.1 L5 18 Z" />
+      </svg>
+    )
+  }
+
+  if (tool === 'node') {
+    return (
+      <svg viewBox="0 0 24 24" className="tool-icon" aria-hidden="true">
+        <circle cx="12" cy="12" r="4" />
+        <path d="M12 4 V7.5 M12 16.5 V20 M4 12 H7.5 M16.5 12 H20" />
+      </svg>
+    )
+  }
+
+  return (
+    <svg viewBox="0 0 24 24" className="tool-icon" aria-hidden="true">
+      <circle cx="7" cy="16" r="2.3" />
+      <circle cx="17" cy="8" r="2.3" />
+      <path d="M8.8 14.4 L15.2 9.6" />
+    </svg>
+  )
+}
+
+function SupportChipIcon({ support }: { support: SupportType | undefined }) {
+  if (!support) {
+    return (
+      <svg viewBox="0 0 24 24" className="tool-icon support-icon" aria-hidden="true">
+        <path d="M6 6 L18 18 M18 6 L6 18" />
+      </svg>
+    )
+  }
+
+  if (support === 'pinned') {
+    return (
+      <svg viewBox="0 0 24 24" className="tool-icon support-icon" aria-hidden="true">
+        <path d="M12 4 V8" />
+        <path d="M12 8 L6 16 H18 Z" />
+        <path d="M6 18 H18" />
+      </svg>
+    )
+  }
+
+  if (support === 'roller-x') {
+    return (
+      <svg viewBox="0 0 24 24" className="tool-icon support-icon" aria-hidden="true">
+        <path d="M12 3 V7" />
+        <path d="M12 7 L6 13 H18 Z" />
+        <circle cx="9" cy="16.5" r="1.8" />
+        <circle cx="15" cy="16.5" r="1.8" />
+        <path d="M6 20 H18" />
+      </svg>
+    )
+  }
+
+  return (
+    <svg viewBox="0 0 24 24" className="tool-icon support-icon" aria-hidden="true">
+      <path d="M3 12 H7" />
+      <path d="M7 12 L13 6 V18 Z" />
+      <circle cx="16.5" cy="9" r="1.8" />
+      <circle cx="16.5" cy="15" r="1.8" />
+      <path d="M20 6 V18" />
+    </svg>
   )
 }
 
