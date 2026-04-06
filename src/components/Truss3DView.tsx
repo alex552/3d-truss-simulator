@@ -1,7 +1,13 @@
 import { Line, OrbitControls, Text } from '@react-three/drei'
 import { Canvas } from '@react-three/fiber'
 import { useMemo } from 'react'
-import { EDITOR_HEIGHT, EDITOR_WIDTH, GRID_SIZE_PX } from '../constants'
+import {
+  EDITOR_HEIGHT,
+  EDITOR_WIDTH,
+  GRID_SIZE_PX,
+  METERS_PER_GRID,
+  pixelsToMeters,
+} from '../constants'
 import { normalizeSupportType, type RuntimeSupportType } from '../lib/truss-model'
 import type {
   HorizontalLoad,
@@ -18,9 +24,9 @@ type Truss3DViewProps = {
 
 function toWorldPosition(node: Node2D, lowestNodeY: number): [number, number, number] {
   return [
-    (node.x - EDITOR_WIDTH / 2) / GRID_SIZE_PX,
+    pixelsToMeters(node.x - EDITOR_WIDTH / 2) / METERS_PER_GRID,
     0,
-    (lowestNodeY - node.y) / GRID_SIZE_PX,
+    pixelsToMeters(lowestNodeY - node.y) / METERS_PER_GRID,
   ]
 }
 

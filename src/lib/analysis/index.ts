@@ -1,4 +1,4 @@
-import { GRID_SIZE_PX } from '../../constants'
+import { pixelsToMeters } from '../../constants'
 import {
   getMemberAxialStiffnessKn,
   normalizeSupportType,
@@ -42,8 +42,8 @@ export function analyzeTruss(nodes: Node2D[], members: Member[]): TrussAnalysisR
   nodes.forEach((node) => {
     nodeLookup.set(node.id, {
       id: node.id,
-      xMeters: node.x / GRID_SIZE_PX,
-      zMeters: -node.y / GRID_SIZE_PX,
+      xMeters: pixelsToMeters(node.x),
+      zMeters: -pixelsToMeters(node.y),
       support: normalizeSupportType(node.support as RuntimeSupportType | undefined),
       loadXKn: getNodeLoadXKn(node),
       loadZKn: getNodeLoadZKn(node),

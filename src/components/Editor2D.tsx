@@ -1,7 +1,13 @@
 import { useMemo, useRef, useState } from 'react'
 import type { ReactElement } from 'react'
 import type { MouseEvent } from 'react'
-import { EDITOR_HEIGHT, EDITOR_WIDTH, GRID_SIZE_PX } from '../constants'
+import {
+  EDITOR_HEIGHT,
+  EDITOR_WIDTH,
+  PIXELS_PER_METER,
+  pixelsToMeters,
+  snapToGrid,
+} from '../constants'
 import { normalizeSupportType, type RuntimeSupportType } from '../lib/truss-model'
 import type {
   HorizontalLoadDirection,
@@ -127,19 +133,28 @@ export function Editor2D({
     }
   }
 
+  const getSnappedSvgPoint = (event: MouseEvent<SVGSVGElement>) => {
+    const point = getSvgPoint(event)
+
+    return {
+      x: snapToGrid(point.x),
+      y: snapToGrid(point.y),
+    }
+  }
+
   const handleCanvasClick = (event: MouseEvent<SVGSVGElement>) => {
     if (dragMovedRef.current) {
       dragMovedRef.current = false
       return
     }
 
-    const point = getSvgPoint(event)
+    const point = getSnappedSvgPoint(event)
     onCanvasClick(point.x, point.y)
     setPreviewPoint(point)
   }
 
   const handleMouseMove = (event: MouseEvent<SVGSVGElement>) => {
-    const point = getSvgPoint(event)
+    const point = getSnappedSvgPoint(event)
 
     if (dragNodeIdRef.current) {
       dragMovedRef.current = true
@@ -153,8 +168,9 @@ export function Editor2D({
 
   const previewLengthInMeters =
     memberStartNode && previewPoint
-      ? Math.hypot(previewPoint.x - memberStartNode.x, previewPoint.y - memberStartNode.y) /
-        GRID_SIZE_PX
+      ? pixelsToMeters(
+          Math.hypot(previewPoint.x - memberStartNode.x, previewPoint.y - memberStartNode.y),
+        )
       : null
 
   const previewMidpoint =
@@ -347,10 +363,10 @@ export function Editor2D({
 
         <p className="editor-help">
           {activeTool === 'member'
-            ? 'Member tool: click a start point on a node or empty space, then click the end point to create the member.'
+            ? 'Member tool: click a start point on a node or empty space, then click the end point to create the member. Points snap to the 0.1 m grid.'
             : activeTool === 'node'
-              ? 'Node tool: click anywhere in the 2D view to place a standalone node.'
-              : 'Select tool: click a node or member to select it, drag a node to move it, and press Delete or Backspace to remove the selected item.'}
+              ? 'Node tool: click anywhere in the 2D view to place a standalone node on the 0.1 m grid.'
+              : 'Select tool: click a node or member to select it, drag a node with 0.1 m snap, and press Delete or Backspace to remove the selected item.'}
         </p>
       </div>
 
@@ -422,7 +438,7 @@ export function Editor2D({
           Z
         </text>
         <text x={AXIS_MARGIN} y={EDITOR_HEIGHT - AXIS_MARGIN + 26} className="axis-hint">
-          Y axis points out of the screen
+          Y axis points out of the screen. Grid spacing: 0.1 m
         </text>
 
         {members.map((member) => {
@@ -434,7 +450,7 @@ export function Editor2D({
           }
 
           const lengthInMeters =
-            Math.hypot(nodeB.x - nodeA.x, nodeB.y - nodeA.y) / GRID_SIZE_PX
+            pixelsToMeters(Math.hypot(nodeB.x - nodeA.x, nodeB.y - nodeA.y))
           const midX = (nodeA.x + nodeB.x) / 2
           const midY = (nodeA.y + nodeB.y) / 2
 
@@ -821,8 +837,8 @@ function getDisplacedNodePosition(
   displayScale: number,
 ) {
   return {
-    x: node.x + (displacement?.xMeters ?? 0) * GRID_SIZE_PX * displayScale,
-    y: node.y - (displacement?.zMeters ?? 0) * GRID_SIZE_PX * displayScale,
+    x: node.x + (displacement?.xMeters ?? 0) * PIXELS_PER_METER * displayScale,
+    y: node.y - (displacement?.zMeters ?? 0) * PIXELS_PER_METER * displayScale,
   }
 }
 

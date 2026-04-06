@@ -4,7 +4,7 @@ import { Editor2D } from './components/Editor2D'
 import { Truss3DView } from './components/Truss3DView'
 import { analyzeTruss } from './lib/analysis'
 import { DEFAULT_MEMBER_AXIAL_STIFFNESS_KN } from './lib/truss-model'
-import { GRID_SIZE_PX } from './constants'
+import { PIXELS_PER_METER } from './constants'
 import type {
   HorizontalLoadDirection,
   Member,
@@ -205,7 +205,7 @@ export default function App() {
       return 0
     }
 
-    const maxDisplacementPx = analysis.maxDisplacementMeters * GRID_SIZE_PX
+    const maxDisplacementPx = analysis.maxDisplacementMeters * PIXELS_PER_METER
     return maxDisplacementPx > 0 ? 24 / maxDisplacementPx : 0
   }, [analysis.maxDisplacementMeters])
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { GRID_SIZE_PX } from '../../constants'
+import { metersToPixels } from '../../constants'
 import { analyzeTruss } from './index'
 import type { Member, Node2D, SupportType } from '../../types'
 
@@ -208,8 +208,8 @@ function createNode(
 ): Node2D {
   return {
     id,
-    x: xMeters * GRID_SIZE_PX,
-    y: -zMeters * GRID_SIZE_PX,
+    x: metersToPixels(xMeters),
+    y: -metersToPixels(zMeters),
     ...overrides,
   }
 }
