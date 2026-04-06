@@ -1,7 +1,13 @@
 import { useEffect, useState } from 'react'
 import { Editor2D } from './components/Editor2D'
 import { Truss3DView } from './components/Truss3DView'
-import type { Member, Node2D, SupportType } from './types'
+import type {
+  HorizontalLoadDirection,
+  Member,
+  Node2D,
+  SupportType,
+  VerticalLoadDirection,
+} from './types'
 
 export type EditorTool = 'select' | 'node' | 'member'
 
@@ -169,6 +175,58 @@ export default function App() {
     )
   }
 
+  const handleSetSelectedNodeHorizontalLoad = (
+    magnitudeKn: number,
+    direction: HorizontalLoadDirection,
+  ) => {
+    if (selectedEntity?.type !== 'node') {
+      return
+    }
+
+    setNodes((currentNodes) =>
+      currentNodes.map((node) =>
+        node.id === selectedEntity.id
+          ? {
+              ...node,
+              horizontalLoad:
+                magnitudeKn > 0
+                  ? {
+                      magnitudeKn,
+                      direction,
+                    }
+                  : undefined,
+            }
+          : node,
+      ),
+    )
+  }
+
+  const handleSetSelectedNodeVerticalLoad = (
+    magnitudeKn: number,
+    direction: VerticalLoadDirection,
+  ) => {
+    if (selectedEntity?.type !== 'node') {
+      return
+    }
+
+    setNodes((currentNodes) =>
+      currentNodes.map((node) =>
+        node.id === selectedEntity.id
+          ? {
+              ...node,
+              verticalLoad:
+                magnitudeKn > 0
+                  ? {
+                      magnitudeKn,
+                      direction,
+                    }
+                  : undefined,
+            }
+          : node,
+      ),
+    )
+  }
+
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Delete' && event.key !== 'Backspace') {
@@ -231,6 +289,8 @@ export default function App() {
           onMoveNode={handleMoveNode}
           onSetActiveTool={handleSetActiveTool}
           onSetSelectedNodeSupport={handleSetSelectedNodeSupport}
+          onSetSelectedNodeHorizontalLoad={handleSetSelectedNodeHorizontalLoad}
+          onSetSelectedNodeVerticalLoad={handleSetSelectedNodeVerticalLoad}
           onDeleteNode={handleDeleteNode}
           onDeleteMember={handleDeleteMember}
         />

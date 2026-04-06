@@ -1,4 +1,16 @@
 export type SupportType = 'fixed' | 'pinned' | 'roller-x' | 'roller-z'
+export type HorizontalLoadDirection = 'left' | 'right'
+export type VerticalLoadDirection = 'up' | 'down'
+
+export type HorizontalLoad = {
+  magnitudeKn: number
+  direction: HorizontalLoadDirection
+}
+
+export type VerticalLoad = {
+  magnitudeKn: number
+  direction: VerticalLoadDirection
+}
 
 export type Node2D = {
   id: string
@@ -6,6 +18,8 @@ export type Node2D = {
   x: number
   y: number
   support?: SupportType
+  horizontalLoad?: HorizontalLoad
+  verticalLoad?: VerticalLoad
 }
 
 export type Member = {

@@ -131,6 +131,49 @@ button {
   padding-left: 2px;
 }
 
+.node-properties {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.load-editor-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.load-editor {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: white;
+}
+
+.load-label,
+.load-unit {
+  color: #475569;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.direction-toggle {
+  display: flex;
+  gap: 6px;
+}
+
+.load-input {
+  width: 82px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 7px 8px;
+  font: inherit;
+}
+
 .editor-help {
   margin: 0;
   color: #4a5568;
@@ -250,6 +293,25 @@ button {
   fill: #f8f9fa;
   stroke: #495057;
   stroke-width: 2;
+}
+
+.load-arrow-line {
+  stroke: #c92a2a;
+  stroke-width: 2.5;
+  stroke-linecap: round;
+}
+
+.load-arrow-head {
+  fill: #c92a2a;
+}
+
+.load-label-text {
+  fill: #c92a2a;
+  font-size: 11px;
+  font-weight: 700;
+  paint-order: stroke;
+  stroke: rgba(255, 255, 255, 0.95);
+  stroke-width: 4px;
 }
 
 .canvas-shell canvas {

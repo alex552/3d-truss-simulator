@@ -2,7 +2,13 @@ import { Line, OrbitControls, Text } from '@react-three/drei'
 import { Canvas } from '@react-three/fiber'
 import { useMemo } from 'react'
 import { EDITOR_HEIGHT, EDITOR_WIDTH, GRID_SIZE_PX } from '../constants'
-import type { Member, Node2D, SupportType } from '../types'
+import type {
+  HorizontalLoad,
+  Member,
+  Node2D,
+  SupportType,
+  VerticalLoad,
+} from '../types'
 
 type Truss3DViewProps = {
   nodes: Node2D[]
@@ -113,6 +119,89 @@ function SupportMarker({
   )
 }
 
+function LoadMarker({
+  position,
+  horizontalLoad,
+  verticalLoad,
+}: {
+  position: [number, number, number]
+  horizontalLoad?: HorizontalLoad
+  verticalLoad?: VerticalLoad
+}) {
+  return (
+    <>
+      {horizontalLoad ? (
+        <DirectionalLoadArrow
+          start={[position[0], 0.28, position[2] + 0.1]}
+          axis={horizontalLoad.direction === 'left' ? 'negative-x' : 'positive-x'}
+          magnitudeKn={horizontalLoad.magnitudeKn}
+          labelOffset={[0, 0.12, 0.22]}
+        />
+      ) : null}
+      {verticalLoad ? (
+        <DirectionalLoadArrow
+          start={[position[0] + 0.22, 0.28, position[2]]}
+          axis={verticalLoad.direction === 'up' ? 'positive-z' : 'negative-z'}
+          magnitudeKn={verticalLoad.magnitudeKn}
+          labelOffset={[0.12, 0.12, 0]}
+        />
+      ) : null}
+    </>
+  )
+}
+
+function DirectionalLoadArrow({
+  start,
+  axis,
+  magnitudeKn,
+  labelOffset,
+}: {
+  start: [number, number, number]
+  axis: 'positive-x' | 'negative-x' | 'positive-z' | 'negative-z'
+  magnitudeKn: number
+  labelOffset: [number, number, number]
+}) {
+  const arrowLength = Math.min(1.5, Math.max(0.55, 0.35 + magnitudeKn * 0.08))
+  const end =
+    axis === 'positive-x'
+      ? ([start[0] + arrowLength, start[1], start[2]] as [number, number, number])
+      : axis === 'negative-x'
+        ? ([start[0] - arrowLength, start[1], start[2]] as [number, number, number])
+        : axis === 'positive-z'
+          ? ([start[0], start[1], start[2] + arrowLength] as [number, number, number])
+          : ([start[0], start[1], start[2] - arrowLength] as [number, number, number])
+
+  const headRotation =
+    axis === 'positive-x'
+      ? [0, 0, -Math.PI / 2]
+      : axis === 'negative-x'
+        ? [0, 0, Math.PI / 2]
+        : axis === 'positive-z'
+          ? [Math.PI / 2, 0, 0]
+          : [-Math.PI / 2, 0, 0]
+
+  return (
+    <>
+      <Line points={[start, end]} color="#c92a2a" lineWidth={2} />
+      <mesh position={end} rotation={headRotation as [number, number, number]}>
+        <coneGeometry args={[0.08, 0.18, 18]} />
+        <meshStandardMaterial color="#c92a2a" />
+      </mesh>
+      <Text
+        position={[
+          (start[0] + end[0]) / 2 + labelOffset[0],
+          (start[1] + end[1]) / 2 + labelOffset[1],
+          (start[2] + end[2]) / 2 + labelOffset[2],
+        ]}
+        fontSize={0.16}
+        color="#c92a2a"
+      >
+        {magnitudeKn.toFixed(1)} kN
+      </Text>
+    </>
+  )
+}
+
 export function Truss3DView({ nodes, members }: Truss3DViewProps) {
   const lowestNodeY = useMemo(
     () => (nodes.length > 0 ? Math.max(...nodes.map((node) => node.y)) : 0),
@@ -162,6 +251,13 @@ export function Truss3DView({ nodes, members }: Truss3DViewProps) {
             return (
               <group key={node.id}>
                 {node.support ? <SupportMarker position={position} support={node.support} /> : null}
+                {node.horizontalLoad || node.verticalLoad ? (
+                  <LoadMarker
+                    position={position}
+                    horizontalLoad={node.horizontalLoad}
+                    verticalLoad={node.verticalLoad}
+                  />
+                ) : null}
                 <mesh position={position}>
                   <sphereGeometry args={[0.12, 24, 24]} />
                   <meshStandardMaterial color="#f76808" />

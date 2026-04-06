@@ -1,7 +1,14 @@
 import { useMemo, useRef, useState } from 'react'
+import type { ReactElement } from 'react'
 import type { MouseEvent } from 'react'
 import { EDITOR_HEIGHT, EDITOR_WIDTH, GRID_SIZE_PX } from '../constants'
-import type { Member, Node2D, SupportType } from '../types'
+import type {
+  HorizontalLoadDirection,
+  Member,
+  Node2D,
+  SupportType,
+  VerticalLoadDirection,
+} from '../types'
 import type { EditorTool, SelectedEntity } from '../App'
 
 type Editor2DProps = {
@@ -16,6 +23,14 @@ type Editor2DProps = {
   onMoveNode: (nodeId: string, x: number, y: number) => void
   onSetActiveTool: (tool: EditorTool) => void
   onSetSelectedNodeSupport: (support: SupportType | undefined) => void
+  onSetSelectedNodeHorizontalLoad: (
+    magnitudeKn: number,
+    direction: HorizontalLoadDirection,
+  ) => void
+  onSetSelectedNodeVerticalLoad: (
+    magnitudeKn: number,
+    direction: VerticalLoadDirection,
+  ) => void
   onDeleteNode: (nodeId: string) => void
   onDeleteMember: (memberId: string) => void
 }
@@ -47,6 +62,8 @@ export function Editor2D({
   onMoveNode,
   onSetActiveTool,
   onSetSelectedNodeSupport,
+  onSetSelectedNodeHorizontalLoad,
+  onSetSelectedNodeVerticalLoad,
   onDeleteNode,
   onDeleteMember,
 }: Editor2DProps) {
@@ -124,6 +141,27 @@ export function Editor2D({
   }
 
   const selectedNodeSupport = selectedNode?.support
+  const selectedHorizontalLoad = selectedNode?.horizontalLoad
+  const selectedVerticalLoad = selectedNode?.verticalLoad
+
+  const handleHorizontalMagnitudeChange = (value: string) => {
+    const magnitudeKn = Number(value)
+    onSetSelectedNodeHorizontalLoad(
+      Number.isFinite(magnitudeKn) ? magnitudeKn : 0,
+      selectedHorizontalLoad?.direction ?? 'right',
+    )
+  }
+
+  const handleVerticalMagnitudeChange = (value: string) => {
+    const magnitudeKn = Number(value)
+    onSetSelectedNodeVerticalLoad(
+      Number.isFinite(magnitudeKn) ? magnitudeKn : 0,
+      selectedVerticalLoad?.direction ?? 'down',
+    )
+  }
+
+  const horizontalDirectionOptions: HorizontalLoadDirection[] = ['left', 'right']
+  const verticalDirectionOptions: VerticalLoadDirection[] = ['up', 'down']
 
   const getNodeClassName = (nodeId: string) => {
     const isSelected = selectedEntity?.type === 'node' && selectedEntity.id === nodeId
@@ -159,22 +197,94 @@ export function Editor2D({
           </div>
 
           {selectedNode ? (
-            <div className="tool-group tool-group-supports" aria-label="Selected node supports">
-              {SUPPORT_OPTIONS.map((option) => (
-                <button
-                  key={option.label}
-                  type="button"
-                  className={
-                    selectedNodeSupport === option.value ||
-                    (selectedNodeSupport === undefined && option.value === undefined)
-                      ? 'tool-button is-active'
-                      : 'tool-button'
-                  }
-                  onClick={() => onSetSelectedNodeSupport(option.value)}
-                >
-                  {option.label}
-                </button>
-              ))}
+            <div className="node-properties" aria-label="Selected node properties">
+              <div className="tool-group tool-group-supports" aria-label="Selected node supports">
+                {SUPPORT_OPTIONS.map((option) => (
+                  <button
+                    key={option.label}
+                    type="button"
+                    className={
+                      selectedNodeSupport === option.value ||
+                      (selectedNodeSupport === undefined && option.value === undefined)
+                        ? 'tool-button is-active'
+                        : 'tool-button'
+                    }
+                    onClick={() => onSetSelectedNodeSupport(option.value)}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="load-editor-group" aria-label="Node loads">
+                <div className="load-editor">
+                  <span className="load-label">H</span>
+                  <div className="direction-toggle">
+                    {horizontalDirectionOptions.map((direction) => (
+                      <button
+                        key={direction}
+                        type="button"
+                        className={
+                          (selectedHorizontalLoad?.direction ?? 'right') === direction
+                            ? 'tool-button is-active'
+                            : 'tool-button'
+                        }
+                        onClick={() =>
+                          onSetSelectedNodeHorizontalLoad(
+                            selectedHorizontalLoad?.magnitudeKn ?? 0,
+                            direction,
+                          )
+                        }
+                      >
+                        {direction === 'left' ? '←' : '→'}
+                      </button>
+                    ))}
+                  </div>
+                  <input
+                    className="load-input"
+                    type="number"
+                    min="0"
+                    step="0.1"
+                    value={selectedHorizontalLoad?.magnitudeKn ?? 0}
+                    onChange={(event) => handleHorizontalMagnitudeChange(event.target.value)}
+                  />
+                  <span className="load-unit">kN</span>
+                </div>
+
+                <div className="load-editor">
+                  <span className="load-label">V</span>
+                  <div className="direction-toggle">
+                    {verticalDirectionOptions.map((direction) => (
+                      <button
+                        key={direction}
+                        type="button"
+                        className={
+                          (selectedVerticalLoad?.direction ?? 'down') === direction
+                            ? 'tool-button is-active'
+                            : 'tool-button'
+                        }
+                        onClick={() =>
+                          onSetSelectedNodeVerticalLoad(
+                            selectedVerticalLoad?.magnitudeKn ?? 0,
+                            direction,
+                          )
+                        }
+                      >
+                        {direction === 'up' ? '↑' : '↓'}
+                      </button>
+                    ))}
+                  </div>
+                  <input
+                    className="load-input"
+                    type="number"
+                    min="0"
+                    step="0.1"
+                    value={selectedVerticalLoad?.magnitudeKn ?? 0}
+                    onChange={(event) => handleVerticalMagnitudeChange(event.target.value)}
+                  />
+                  <span className="load-unit">kN</span>
+                </div>
+              </div>
             </div>
           ) : null}
         </div>
@@ -320,6 +430,7 @@ export function Editor2D({
         {nodes.map((node) => (
           <g key={node.id}>
             <SupportSymbol node={node} />
+            <NodeLoads node={node} />
             <circle
               cx={node.x}
               cy={node.y}
@@ -419,4 +530,71 @@ function SupportSymbol({ node }: { node: Node2D }) {
       {rollerXSymbol}
     </g>
   )
+}
+
+function NodeLoads({ node }: { node: Node2D }) {
+  const loadElements: ReactElement[] = []
+
+  if (node.horizontalLoad) {
+    const arrowLength = clampArrowLength(node.horizontalLoad.magnitudeKn)
+    const direction = node.horizontalLoad.direction === 'left' ? -1 : 1
+    const endX = node.x + direction * arrowLength
+    const offsetY = node.verticalLoad ? node.y - 34 : node.y - 26
+
+    loadElements.push(
+      <g key="horizontal-load" className="node-load" pointerEvents="none">
+        <line x1={node.x} y1={offsetY} x2={endX} y2={offsetY} className="load-arrow-line" />
+        <polygon
+          points={
+            direction === 1
+              ? `${endX},${offsetY} ${endX - 10},${offsetY - 5} ${endX - 10},${offsetY + 5}`
+              : `${endX},${offsetY} ${endX + 10},${offsetY - 5} ${endX + 10},${offsetY + 5}`
+          }
+          className="load-arrow-head"
+        />
+        <text
+          x={(node.x + endX) / 2}
+          y={offsetY - 8}
+          className="load-label-text"
+          textAnchor="middle"
+        >
+          {node.horizontalLoad.magnitudeKn.toFixed(1)} kN
+        </text>
+      </g>,
+    )
+  }
+
+  if (node.verticalLoad) {
+    const arrowLength = clampArrowLength(node.verticalLoad.magnitudeKn)
+    const direction = node.verticalLoad.direction === 'up' ? -1 : 1
+    const endY = node.y + direction * arrowLength
+    const offsetX = node.horizontalLoad ? node.x + 34 : node.x + 26
+
+    loadElements.push(
+      <g key="vertical-load" className="node-load" pointerEvents="none">
+        <line x1={offsetX} y1={node.y} x2={offsetX} y2={endY} className="load-arrow-line" />
+        <polygon
+          points={
+            direction === 1
+              ? `${offsetX},${endY} ${offsetX - 5},${endY - 10} ${offsetX + 5},${endY - 10}`
+              : `${offsetX},${endY} ${offsetX - 5},${endY + 10} ${offsetX + 5},${endY + 10}`
+          }
+          className="load-arrow-head"
+        />
+        <text
+          x={offsetX + 10}
+          y={(node.y + endY) / 2 - 6}
+          className="load-label-text"
+        >
+          {node.verticalLoad.magnitudeKn.toFixed(1)} kN
+        </text>
+      </g>,
+    )
+  }
+
+  return <>{loadElements}</>
+}
+
+function clampArrowLength(magnitudeKn: number) {
+  return Math.min(72, Math.max(28, 20 + magnitudeKn * 4))
 }
