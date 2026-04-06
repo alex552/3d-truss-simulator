@@ -532,6 +532,7 @@ export function Editor2D({
                   return
                 }
 
+                event.preventDefault()
                 event.stopPropagation()
                 onNodeClick(node.id)
                 dragNodeIdRef.current = node.id

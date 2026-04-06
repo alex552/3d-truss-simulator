@@ -205,6 +205,9 @@ button {
     linear-gradient(rgba(47, 111, 237, 0.08) 1px, transparent 1px);
   background-size: 100% 100%, 32px 32px, 32px 32px;
   cursor: crosshair;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
 }
 
 .member-line {
