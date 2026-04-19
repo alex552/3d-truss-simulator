@@ -260,6 +260,18 @@ button {
   background: #f8fafc;
 }
 
+.rail-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  border-color: #cbd5e1;
+  background: rgba(241, 245, 249, 0.85);
+  color: #94a3b8;
+}
+
+.rail-button:disabled::after {
+  display: none;
+}
+
 .rail-button.is-active:hover,
 .rail-button.is-active:focus-visible {
   border-color: #2f6fed;

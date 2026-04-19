@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Editor2D } from './components/Editor2D'
 import { analyzeTruss } from './lib/analysis'
 import { DEFAULT_MEMBER_AXIAL_STIFFNESS_KN } from './lib/truss-model'
@@ -18,12 +18,25 @@ export type SelectedEntity =
   | { type: 'member'; id: string }
   | null
 
+type ModelSnapshot = {
+  nodes: Node2D[]
+  members: Member[]
+}
+
+const MAX_HISTORY_STEPS = 100
+
 export default function App() {
   const [nodes, setNodes] = useState<Node2D[]>([])
   const [members, setMembers] = useState<Member[]>([])
   const [memberStartNodeId, setMemberStartNodeId] = useState<string | null>(null)
   const [selectedEntity, setSelectedEntity] = useState<SelectedEntity>(null)
   const [activeTool, setActiveTool] = useState<EditorTool>('member')
+  const [showResults, setShowResults] = useState(true)
+  const [undoStack, setUndoStack] = useState<ModelSnapshot[]>([])
+  const [redoStack, setRedoStack] = useState<ModelSnapshot[]>([])
+
+  const isHistoryNavigationRef = useRef(false)
+  const previousSnapshotRef = useRef<ModelSnapshot>({ nodes, members })
 
   const createNode = (x: number, y: number): Node2D => ({
     id: crypto.randomUUID(),
@@ -262,6 +275,71 @@ export default function App() {
     )
   }
 
+  const canUndo = undoStack.length > 0
+  const canRedo = redoStack.length > 0
+
+  const handleUndo = () => {
+    if (!canUndo) {
+      return
+    }
+
+    const previousSnapshot = undoStack[undoStack.length - 1]
+    const currentSnapshot: ModelSnapshot = { nodes, members }
+    isHistoryNavigationRef.current = true
+    setNodes(previousSnapshot.nodes)
+    setMembers(previousSnapshot.members)
+    setUndoStack((currentUndoStack) => currentUndoStack.slice(0, -1))
+    setRedoStack((currentRedoStack) => [currentSnapshot, ...currentRedoStack])
+    setMemberStartNodeId(null)
+    setSelectedEntity(null)
+  }
+
+  const handleRedo = () => {
+    if (!canRedo) {
+      return
+    }
+
+    const [nextSnapshot, ...remainingRedoSnapshots] = redoStack
+    if (!nextSnapshot) {
+      return
+    }
+
+    const currentSnapshot: ModelSnapshot = { nodes, members }
+    isHistoryNavigationRef.current = true
+    setNodes(nextSnapshot.nodes)
+    setMembers(nextSnapshot.members)
+    setRedoStack(remainingRedoSnapshots)
+    setUndoStack((currentUndoStack) => [...currentUndoStack, currentSnapshot])
+    setMemberStartNodeId(null)
+    setSelectedEntity(null)
+  }
+
+  useEffect(() => {
+    const previousSnapshot = previousSnapshotRef.current
+    const hasModelChanged = previousSnapshot.nodes !== nodes || previousSnapshot.members !== members
+
+    if (!hasModelChanged) {
+      return
+    }
+
+    previousSnapshotRef.current = { nodes, members }
+
+    if (isHistoryNavigationRef.current) {
+      isHistoryNavigationRef.current = false
+      return
+    }
+
+    setUndoStack((currentUndoStack) => {
+      const nextUndoStack = [...currentUndoStack, previousSnapshot]
+      if (nextUndoStack.length <= MAX_HISTORY_STEPS) {
+        return nextUndoStack
+      }
+
+      return nextUndoStack.slice(nextUndoStack.length - MAX_HISTORY_STEPS)
+    })
+    setRedoStack([])
+  }, [members, nodes])
+
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key !== 'Delete' && event.key !== 'Backspace') {
@@ -313,6 +391,12 @@ export default function App() {
           onSetSelectedNodeVerticalLoad={handleSetSelectedNodeVerticalLoad}
           onDeleteNode={handleDeleteNode}
           onDeleteMember={handleDeleteMember}
+          showResults={showResults}
+          onToggleShowResults={() => setShowResults((currentShowResults) => !currentShowResults)}
+          canUndo={canUndo}
+          canRedo={canRedo}
+          onUndo={handleUndo}
+          onRedo={handleRedo}
         />
     </main>
   )

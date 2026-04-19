@@ -48,6 +48,12 @@ type Editor2DProps = {
   ) => void
   onDeleteNode: (nodeId: string) => void
   onDeleteMember: (memberId: string) => void
+  showResults: boolean
+  onToggleShowResults: () => void
+  canUndo: boolean
+  canRedo: boolean
+  onUndo: () => void
+  onRedo: () => void
 }
 
 type Point = {
@@ -106,6 +112,12 @@ export function Editor2D({
   onSetSelectedNodeVerticalLoad,
   onDeleteNode,
   onDeleteMember,
+  showResults,
+  onToggleShowResults,
+  canUndo,
+  canRedo,
+  onUndo,
+  onRedo,
 }: Editor2DProps) {
   const [previewPoint, setPreviewPoint] = useState<Point | null>(null)
   const [viewport, setViewportState] = useState<Viewport>({
@@ -571,6 +583,49 @@ export function Editor2D({
               </div>
             ))}
           </div>
+
+          <div className="editor-tool-cluster" aria-label="Results and history controls">
+            <button
+              type="button"
+              className={
+                showResults
+                  ? 'tool-button rail-button cad-tool-button is-active'
+                  : 'tool-button rail-button cad-tool-button'
+              }
+              onClick={onToggleShowResults}
+              data-tooltip={showResults ? 'Hide truss results' : 'Show truss results'}
+              aria-label={showResults ? 'Hide truss results' : 'Show truss results'}
+              title={showResults ? 'Hide truss results' : 'Show truss results'}
+            >
+              <RailActionIcon action={showResults ? 'results-on' : 'results-off'} />
+            </button>
+
+            <div className="tool-cluster-divider" aria-hidden="true" />
+
+            <button
+              type="button"
+              className="tool-button rail-button cad-tool-button"
+              onClick={onUndo}
+              data-tooltip="Undo"
+              aria-label="Undo"
+              title="Undo"
+              disabled={!canUndo}
+            >
+              <RailActionIcon action="undo" />
+            </button>
+
+            <button
+              type="button"
+              className="tool-button rail-button cad-tool-button"
+              onClick={onRedo}
+              data-tooltip="Redo"
+              aria-label="Redo"
+              title="Redo"
+              disabled={!canRedo}
+            >
+              <RailActionIcon action="redo" />
+            </button>
+          </div>
         </div>
 
         <div className="editor-overlay editor-zoom-rail" aria-label="Viewport controls">
@@ -879,7 +934,7 @@ export function Editor2D({
                     <text x={midX} y={midY - 10} className="member-length" textAnchor="middle">
                       {lengthInMeters.toFixed(2)} m
                     </text>
-                    {isStableAnalysis ? (
+                    {showResults && isStableAnalysis ? (
                       <MemberForceLabel
                         midX={midX}
                         midY={midY}
@@ -890,7 +945,7 @@ export function Editor2D({
                 )
               })}
 
-              {isStableAnalysis && displacementDisplayScale > 0 ? (
+              {showResults && isStableAnalysis && displacementDisplayScale > 0 ? (
                 <DisplacedShapeOverlay
                   nodes={nodes}
                   members={members}
@@ -927,7 +982,7 @@ export function Editor2D({
                 <g key={node.id}>
                   <SupportSymbol node={node} />
                   <NodeLoads node={node} />
-                  {isStableAnalysis ? (
+                  {showResults && isStableAnalysis ? (
                     <ReactionOverlay node={node} reaction={reactionByNodeId.get(node.id)} />
                   ) : null}
                   <circle
@@ -977,6 +1032,42 @@ export function Editor2D({
         </svg>
       </div>
     </div>
+  )
+}
+
+function RailActionIcon({ action }: { action: 'results-on' | 'results-off' | 'undo' | 'redo' }) {
+  if (action === 'results-on') {
+    return (
+      <svg viewBox="0 0 24 24" className="tool-icon" aria-hidden="true">
+        <path d="M2.5 12 C4.7 8 8 5.8 12 5.8 C16 5.8 19.3 8 21.5 12 C19.3 16 16 18.2 12 18.2 C8 18.2 4.7 16 2.5 12 Z" />
+        <circle cx="12" cy="12" r="3" />
+      </svg>
+    )
+  }
+
+  if (action === 'results-off') {
+    return (
+      <svg viewBox="0 0 24 24" className="tool-icon" aria-hidden="true">
+        <path d="M2.5 12 C4.7 8 8 5.8 12 5.8 C16 5.8 19.3 8 21.5 12 C19.3 16 16 18.2 12 18.2 C8 18.2 4.7 16 2.5 12 Z" />
+        <path d="M4.5 19.5 L19.5 4.5" />
+      </svg>
+    )
+  }
+
+  if (action === 'undo') {
+    return (
+      <svg viewBox="0 0 24 24" className="tool-icon" aria-hidden="true">
+        <path d="M9 6.5 L3.8 11.7 L9 16.9" />
+        <path d="M20.2 17.8 C19.4 13.3 16.3 11.1 11.6 11.1 H4.2" />
+      </svg>
+    )
+  }
+
+  return (
+    <svg viewBox="0 0 24 24" className="tool-icon" aria-hidden="true">
+      <path d="M15 6.5 L20.2 11.7 L15 16.9" />
+      <path d="M3.8 17.8 C4.6 13.3 7.7 11.1 12.4 11.1 H19.8" />
+    </svg>
   )
 }
 
