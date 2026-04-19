@@ -48,8 +48,10 @@ type Editor2DProps = {
   ) => void
   onDeleteNode: (nodeId: string) => void
   onDeleteMember: (memberId: string) => void
-  showResults: boolean
-  onToggleShowResults: () => void
+  showForceResults: boolean
+  showDeflectionResults: boolean
+  onToggleShowForceResults: () => void
+  onToggleShowDeflectionResults: () => void
   canUndo: boolean
   canRedo: boolean
   onUndo: () => void
@@ -112,8 +114,10 @@ export function Editor2D({
   onSetSelectedNodeVerticalLoad,
   onDeleteNode,
   onDeleteMember,
-  showResults,
-  onToggleShowResults,
+  showForceResults,
+  showDeflectionResults,
+  onToggleShowForceResults,
+  onToggleShowDeflectionResults,
   canUndo,
   canRedo,
   onUndo,
@@ -131,10 +135,12 @@ export function Editor2D({
   })
   const [isSpacePressed, setIsSpacePressed] = useState(false)
   const [isPanning, setIsPanning] = useState(false)
+  const [isResultsMenuOpen, setIsResultsMenuOpen] = useState(false)
 
   const viewportRef = useRef(viewport)
   const canvasShellRef = useRef<HTMLDivElement | null>(null)
   const svgRef = useRef<SVGSVGElement | null>(null)
+  const resultsMenuRef = useRef<HTMLDivElement | null>(null)
   const dragNodeIdRef = useRef<string | null>(null)
   const dragMovedRef = useRef(false)
   const suppressClickRef = useRef(false)
@@ -190,6 +196,7 @@ export function Editor2D({
   const verticalDirectionOptions: VerticalLoadDirection[] = ['up', 'down']
   const isStableAnalysis =
     analysis.status === 'stable-determinate' || analysis.status === 'stable-indeterminate'
+  const showAnyResults = showForceResults || showDeflectionResults
 
   const updateViewport = (nextViewport: Viewport) => {
     viewportRef.current = nextViewport
@@ -365,6 +372,38 @@ export function Editor2D({
       resizeObserver.disconnect()
     }
   }, [])
+
+  useEffect(() => {
+    if (!isResultsMenuOpen) {
+      return
+    }
+
+    const handlePointerDown = (event: globalThis.MouseEvent) => {
+      if (!resultsMenuRef.current) {
+        return
+      }
+
+      if (resultsMenuRef.current.contains(event.target as Node)) {
+        return
+      }
+
+      setIsResultsMenuOpen(false)
+    }
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsResultsMenuOpen(false)
+      }
+    }
+
+    window.addEventListener('mousedown', handlePointerDown)
+    window.addEventListener('keydown', handleEscape)
+
+    return () => {
+      window.removeEventListener('mousedown', handlePointerDown)
+      window.removeEventListener('keydown', handleEscape)
+    }
+  }, [isResultsMenuOpen])
 
   const sceneTransform = `matrix(${viewport.zoom} 0 0 ${viewport.zoom} ${-viewport.panX * viewport.zoom} ${-viewport.panY * viewport.zoom})`
 
@@ -585,20 +624,62 @@ export function Editor2D({
           </div>
 
           <div className="editor-tool-cluster" aria-label="Results and history controls">
-            <button
-              type="button"
-              className={
-                showResults
-                  ? 'tool-button rail-button cad-tool-button is-active'
-                  : 'tool-button rail-button cad-tool-button'
-              }
-              onClick={onToggleShowResults}
-              data-tooltip={showResults ? 'Hide truss results' : 'Show truss results'}
-              aria-label={showResults ? 'Hide truss results' : 'Show truss results'}
-              title={showResults ? 'Hide truss results' : 'Show truss results'}
-            >
-              <RailActionIcon action={showResults ? 'results-on' : 'results-off'} />
-            </button>
+            <div className="results-menu-anchor" ref={resultsMenuRef}>
+              <button
+                type="button"
+                className={
+                  isResultsMenuOpen || showAnyResults
+                    ? 'tool-button rail-button cad-tool-button is-active'
+                    : 'tool-button rail-button cad-tool-button'
+                }
+                onClick={() => setIsResultsMenuOpen((currentOpen) => !currentOpen)}
+                data-tooltip="Results options"
+                aria-label="Results options"
+                title="Results options"
+                aria-haspopup="menu"
+                aria-expanded={isResultsMenuOpen}
+              >
+                <RailActionIcon action={showAnyResults ? 'results-on' : 'results-off'} />
+              </button>
+
+              {isResultsMenuOpen ? (
+                <div className="results-submenu" role="menu" aria-label="Result layers">
+                  <button
+                    type="button"
+                    role="menuitemcheckbox"
+                    aria-checked={showForceResults}
+                    className={
+                      showForceResults
+                        ? 'tool-button results-submenu-item is-active'
+                        : 'tool-button results-submenu-item'
+                    }
+                    onClick={onToggleShowForceResults}
+                  >
+                    <span className="results-submenu-check" aria-hidden="true">
+                      {showForceResults ? '✓' : ''}
+                    </span>
+                    Forces
+                  </button>
+
+                  <button
+                    type="button"
+                    role="menuitemcheckbox"
+                    aria-checked={showDeflectionResults}
+                    className={
+                      showDeflectionResults
+                        ? 'tool-button results-submenu-item is-active'
+                        : 'tool-button results-submenu-item'
+                    }
+                    onClick={onToggleShowDeflectionResults}
+                  >
+                    <span className="results-submenu-check" aria-hidden="true">
+                      {showDeflectionResults ? '✓' : ''}
+                    </span>
+                    Deflections
+                  </button>
+                </div>
+              ) : null}
+            </div>
 
             <div className="tool-cluster-divider" aria-hidden="true" />
 
@@ -934,7 +1015,7 @@ export function Editor2D({
                     <text x={midX} y={midY - 10} className="member-length" textAnchor="middle">
                       {lengthInMeters.toFixed(2)} m
                     </text>
-                    {showResults && isStableAnalysis ? (
+                    {showForceResults && isStableAnalysis ? (
                       <MemberForceLabel
                         midX={midX}
                         midY={midY}
@@ -945,7 +1026,7 @@ export function Editor2D({
                 )
               })}
 
-              {showResults && isStableAnalysis && displacementDisplayScale > 0 ? (
+              {showDeflectionResults && isStableAnalysis && displacementDisplayScale > 0 ? (
                 <DisplacedShapeOverlay
                   nodes={nodes}
                   members={members}
@@ -982,7 +1063,7 @@ export function Editor2D({
                 <g key={node.id}>
                   <SupportSymbol node={node} />
                   <NodeLoads node={node} />
-                  {showResults && isStableAnalysis ? (
+                  {showForceResults && isStableAnalysis ? (
                     <ReactionOverlay node={node} reaction={reactionByNodeId.get(node.id)} />
                   ) : null}
                   <circle
@@ -1035,7 +1116,11 @@ export function Editor2D({
   )
 }
 
-function RailActionIcon({ action }: { action: 'results-on' | 'results-off' | 'undo' | 'redo' }) {
+function RailActionIcon({
+  action,
+}: {
+  action: 'results-on' | 'results-off' | 'undo' | 'redo'
+}) {
   if (action === 'results-on') {
     return (
       <svg viewBox="0 0 24 24" className="tool-icon" aria-hidden="true">

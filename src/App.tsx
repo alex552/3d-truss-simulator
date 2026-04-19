@@ -31,7 +31,8 @@ export default function App() {
   const [memberStartNodeId, setMemberStartNodeId] = useState<string | null>(null)
   const [selectedEntity, setSelectedEntity] = useState<SelectedEntity>(null)
   const [activeTool, setActiveTool] = useState<EditorTool>('member')
-  const [showResults, setShowResults] = useState(true)
+  const [showForceResults, setShowForceResults] = useState(true)
+  const [showDeflectionResults, setShowDeflectionResults] = useState(true)
   const [undoStack, setUndoStack] = useState<ModelSnapshot[]>([])
   const [redoStack, setRedoStack] = useState<ModelSnapshot[]>([])
 
@@ -391,8 +392,14 @@ export default function App() {
           onSetSelectedNodeVerticalLoad={handleSetSelectedNodeVerticalLoad}
           onDeleteNode={handleDeleteNode}
           onDeleteMember={handleDeleteMember}
-          showResults={showResults}
-          onToggleShowResults={() => setShowResults((currentShowResults) => !currentShowResults)}
+          showForceResults={showForceResults}
+          showDeflectionResults={showDeflectionResults}
+          onToggleShowForceResults={() =>
+            setShowForceResults((currentShowForceResults) => !currentShowForceResults)
+          }
+          onToggleShowDeflectionResults={() =>
+            setShowDeflectionResults((currentShowDeflectionResults) => !currentShowDeflectionResults)
+          }
           canUndo={canUndo}
           canRedo={canRedo}
           onUndo={handleUndo}

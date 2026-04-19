@@ -199,6 +199,54 @@ button {
   gap: 6px;
 }
 
+.results-menu-anchor {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.results-submenu {
+  position: absolute;
+  left: calc(100% + 10px);
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 140px;
+  padding: 8px;
+  border: 1px solid rgba(148, 163, 184, 0.42);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.16);
+}
+
+.results-submenu-item {
+  justify-content: flex-start;
+  gap: 8px;
+  width: 100%;
+  min-height: 34px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.results-submenu-divider {
+  width: 100%;
+  height: 1px;
+  background: rgba(203, 213, 225, 0.9);
+}
+
+.results-submenu-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  color: #2f6fed;
+}
+
 .cad-tool-button,
 .rail-button,
 .support-chip,
