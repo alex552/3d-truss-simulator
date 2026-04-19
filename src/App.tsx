@@ -23,7 +23,105 @@ type ModelSnapshot = {
   members: Member[]
 }
 
+type PersistedTrussModel = {
+  version: 1
+  nodes: Node2D[]
+  members: Member[]
+}
+
 const MAX_HISTORY_STEPS = 100
+const MODEL_FILE_EXTENSION = '.truss.json'
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
+}
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value)
+}
+
+function isHorizontalLoad(value: unknown): value is Node2D['horizontalLoad'] {
+  if (!isRecord(value)) {
+    return false
+  }
+
+  return (
+    isFiniteNumber(value.magnitudeKn) &&
+    (value.direction === 'left' || value.direction === 'right')
+  )
+}
+
+function isVerticalLoad(value: unknown): value is Node2D['verticalLoad'] {
+  if (!isRecord(value)) {
+    return false
+  }
+
+  return (
+    isFiniteNumber(value.magnitudeKn) &&
+    (value.direction === 'up' || value.direction === 'down')
+  )
+}
+
+function isNode2D(value: unknown): value is Node2D {
+  if (!isRecord(value)) {
+    return false
+  }
+
+  const hasValidSupport =
+    value.support === undefined ||
+    value.support === 'pinned' ||
+    value.support === 'roller-x' ||
+    value.support === 'roller-z'
+
+  return (
+    typeof value.id === 'string' &&
+    isFiniteNumber(value.x) &&
+    isFiniteNumber(value.y) &&
+    hasValidSupport &&
+    (value.horizontalLoad === undefined || isHorizontalLoad(value.horizontalLoad)) &&
+    (value.verticalLoad === undefined || isVerticalLoad(value.verticalLoad))
+  )
+}
+
+function isMember(value: unknown): value is Member {
+  if (!isRecord(value)) {
+    return false
+  }
+
+  return (
+    typeof value.id === 'string' &&
+    typeof value.nodeAId === 'string' &&
+    typeof value.nodeBId === 'string' &&
+    isFiniteNumber(value.axialStiffnessKn)
+  )
+}
+
+function parsePersistedModel(content: string): ModelSnapshot | null {
+  let parsed: unknown
+
+  try {
+    parsed = JSON.parse(content)
+  } catch {
+    return null
+  }
+
+  if (!isRecord(parsed)) {
+    return null
+  }
+
+  if (parsed.version !== 1 || !Array.isArray(parsed.nodes) || !Array.isArray(parsed.members)) {
+    return null
+  }
+
+  if (!parsed.nodes.every(isNode2D) || !parsed.members.every(isMember)) {
+    return null
+  }
+
+  return {
+    nodes: parsed.nodes,
+    members: parsed.members,
+  }
+}
 
 export default function App() {
   const [nodes, setNodes] = useState<Node2D[]>([])
@@ -276,6 +374,47 @@ export default function App() {
     )
   }
 
+  const handleSaveModelToFile = () => {
+    const payload: PersistedTrussModel = {
+      version: 1,
+      nodes,
+      members,
+    }
+    const blob = new Blob([JSON.stringify(payload, null, 2)], {
+      type: 'application/json',
+    })
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
+    const downloadName = `truss-model-${timestamp}${MODEL_FILE_EXTENSION}`
+    const blobUrl = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+
+    link.href = blobUrl
+    link.download = downloadName
+    document.body.append(link)
+    link.click()
+    link.remove()
+    URL.revokeObjectURL(blobUrl)
+  }
+
+  const handleLoadModelFromFile = async (file: File | null) => {
+    if (!file) {
+      return
+    }
+
+    const content = await file.text()
+    const snapshot = parsePersistedModel(content)
+
+    if (!snapshot) {
+      window.alert('Could not load file. Please choose a valid truss model JSON file.')
+      return
+    }
+
+    setNodes(snapshot.nodes)
+    setMembers(snapshot.members)
+    setMemberStartNodeId(null)
+    setSelectedEntity(null)
+  }
+
   const canUndo = undoStack.length > 0
   const canRedo = redoStack.length > 0
 
@@ -404,6 +543,8 @@ export default function App() {
           canRedo={canRedo}
           onUndo={handleUndo}
           onRedo={handleRedo}
+          onSaveModel={handleSaveModelToFile}
+          onLoadModel={handleLoadModelFromFile}
         />
     </main>
   )

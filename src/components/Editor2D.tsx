@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import type { ChangeEvent } from 'react'
 import type { ReactElement } from 'react'
 import type { MouseEvent } from 'react'
 import {
@@ -56,6 +57,8 @@ type Editor2DProps = {
   canRedo: boolean
   onUndo: () => void
   onRedo: () => void
+  onSaveModel: () => void
+  onLoadModel: (file: File | null) => void | Promise<void>
 }
 
 type Point = {
@@ -122,6 +125,8 @@ export function Editor2D({
   canRedo,
   onUndo,
   onRedo,
+  onSaveModel,
+  onLoadModel,
 }: Editor2DProps) {
   const [previewPoint, setPreviewPoint] = useState<Point | null>(null)
   const [viewport, setViewportState] = useState<Viewport>({
@@ -147,6 +152,7 @@ export function Editor2D({
   const panSessionRef = useRef<PanSession | null>(null)
   const isPanningRef = useRef(false)
   const spacePressedRef = useRef(false)
+  const loadInputRef = useRef<HTMLInputElement | null>(null)
 
   const memberStartNode = useMemo(
     () => nodes.find((node) => node.id === memberStartNodeId) ?? null,
@@ -407,6 +413,12 @@ export function Editor2D({
 
   const sceneTransform = `matrix(${viewport.zoom} 0 0 ${viewport.zoom} ${-viewport.panX * viewport.zoom} ${-viewport.panY * viewport.zoom})`
 
+  const handleLoadFileInputChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const [file] = Array.from(event.target.files ?? [])
+    await onLoadModel(file ?? null)
+    event.target.value = ''
+  }
+
   const getNodeClassName = (nodeId: string) => {
     const isSelected = selectedEntity?.type === 'node' && selectedEntity.id === nodeId
     const isMemberStart = memberStartNodeId === nodeId
@@ -599,6 +611,13 @@ export function Editor2D({
 
   return (
     <div className="editor-fullscreen">
+      <input
+        ref={loadInputRef}
+        type="file"
+        accept="application/json,.json,.truss.json"
+        style={{ display: 'none' }}
+        onChange={handleLoadFileInputChange}
+      />
       <div ref={canvasShellRef} className="editor-canvas-shell editor-canvas-shell-fullscreen">
         <div className="editor-overlay editor-side-rail" aria-label="2D editor toolbar">
           <div className="editor-tool-cluster">
@@ -705,6 +724,30 @@ export function Editor2D({
               disabled={!canRedo}
             >
               <RailActionIcon action="redo" />
+            </button>
+
+            <div className="tool-cluster-divider" aria-hidden="true" />
+
+            <button
+              type="button"
+              className="tool-button rail-button cad-tool-button"
+              onClick={onSaveModel}
+              data-tooltip="Save model"
+              aria-label="Save model"
+              title="Save model"
+            >
+              <RailActionIcon action="save" />
+            </button>
+
+            <button
+              type="button"
+              className="tool-button rail-button cad-tool-button"
+              onClick={() => loadInputRef.current?.click()}
+              data-tooltip="Load model"
+              aria-label="Load model"
+              title="Load model"
+            >
+              <RailActionIcon action="load" />
             </button>
           </div>
         </div>
@@ -1119,7 +1162,7 @@ export function Editor2D({
 function RailActionIcon({
   action,
 }: {
-  action: 'results-on' | 'results-off' | 'undo' | 'redo'
+  action: 'results-on' | 'results-off' | 'undo' | 'redo' | 'save' | 'load'
 }) {
   if (action === 'results-on') {
     return (
@@ -1144,6 +1187,26 @@ function RailActionIcon({
       <svg viewBox="0 0 24 24" className="tool-icon" aria-hidden="true">
         <path d="M9 6.5 L3.8 11.7 L9 16.9" />
         <path d="M20.2 17.8 C19.4 13.3 16.3 11.1 11.6 11.1 H4.2" />
+      </svg>
+    )
+  }
+
+  if (action === 'save') {
+    return (
+      <svg viewBox="0 0 24 24" className="tool-icon" aria-hidden="true">
+        <path d="M5 4.5 H16.8 L19.5 7.2 V19.5 H5 Z" />
+        <path d="M8 4.5 V10.5 H15.5 V4.5" />
+        <path d="M8.2 16.2 H16.3" />
+      </svg>
+    )
+  }
+
+  if (action === 'load') {
+    return (
+      <svg viewBox="0 0 24 24" className="tool-icon" aria-hidden="true">
+        <path d="M5 4.5 H16.8 L19.5 7.2 V19.5 H5 Z" />
+        <path d="M12 9.2 V15.3" />
+        <path d="M9.6 12.9 L12 15.3 L14.4 12.9" />
       </svg>
     )
   }
