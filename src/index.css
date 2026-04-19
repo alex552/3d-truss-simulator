@@ -158,21 +158,43 @@ button {
   z-index: 2;
 }
 
-.editor-tool-rail {
-  top: 34px;
-  left: 30px;
+.editor-side-rail {
+  top: 18px;
+  left: 18px;
   display: flex;
   flex-direction: column;
+  align-items: flex-start;
   gap: 10px;
+  pointer-events: none;
+}
+
+.editor-tool-cluster {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
   padding: 10px;
   border: 1px solid rgba(148, 163, 184, 0.42);
   border-radius: 16px;
-  background: rgba(255, 255, 255, 0.84);
+  background: rgba(255, 255, 255, 0.88);
   backdrop-filter: blur(12px);
   box-shadow: 0 10px 24px rgba(15, 23, 42, 0.12);
+  pointer-events: auto;
+}
+
+.editor-tool-cluster-status {
+  gap: 2px;
+  min-width: 72px;
+  padding: 8px 10px;
+}
+
+.editor-tool-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
 .cad-tool-button,
+.rail-button,
 .support-chip,
 .direction-button {
   display: inline-flex;
@@ -180,15 +202,21 @@ button {
   justify-content: center;
 }
 
-.cad-tool-button {
-  width: 44px;
-  height: 44px;
-  padding: 0;
+.rail-button {
+  width: 58px;
+  min-height: 58px;
+  padding: 7px 6px 6px;
   border-radius: 12px;
+  flex-direction: column;
+  gap: 3px;
   background: rgba(255, 255, 255, 0.94);
 }
 
-.cad-tool-button:hover,
+.cad-tool-button {
+  color: #334155;
+}
+
+.rail-button:hover,
 .support-chip:hover,
 .direction-button:hover {
   border-color: #94a3b8;
@@ -203,6 +231,45 @@ button {
   stroke-width: 1.8;
   stroke-linecap: round;
   stroke-linejoin: round;
+}
+
+.rail-button-label {
+  color: #64748b;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0.02em;
+}
+
+.tool-button.is-active .rail-button-label {
+  color: white;
+}
+
+.tool-cluster-divider {
+  width: 60%;
+  height: 1px;
+  align-self: center;
+  background: rgba(203, 213, 225, 0.9);
+}
+
+.editor-rail-status-label {
+  color: #64748b;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.editor-rail-status-value {
+  color: #0f172a;
+  font-size: 14px;
+  line-height: 1.2;
+}
+
+.editor-rail-status-meta {
+  color: #475569;
+  font-size: 11px;
+  font-weight: 600;
 }
 
 .editor-inspector {
@@ -238,46 +305,6 @@ button {
   color: #475569;
   font-size: 12px;
   font-weight: 600;
-}
-
-.editor-viewport-hud {
-  right: 24px;
-  bottom: 24px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 12px;
-  border: 1px solid rgba(203, 213, 225, 0.85);
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.86);
-  backdrop-filter: blur(14px);
-  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.12);
-}
-
-.viewport-button {
-  min-width: 36px;
-  height: 36px;
-  padding: 0;
-  border-radius: 10px;
-  font-size: 20px;
-  line-height: 1;
-}
-
-.viewport-fit-button {
-  min-width: 44px;
-  height: 36px;
-  padding: 0 10px;
-  border-radius: 10px;
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.viewport-zoom-readout {
-  min-width: 56px;
-  color: #334155;
-  font-size: 12px;
-  font-weight: 700;
-  text-align: center;
 }
 
 .inspector-header {
@@ -757,16 +784,24 @@ button {
     overflow: hidden;
   }
 
-  .editor-tool-rail {
-    top: 26px;
-    left: 22px;
+  .editor-side-rail {
+    top: 14px;
+    left: 14px;
     gap: 8px;
+  }
+
+  .editor-tool-cluster {
     padding: 8px;
   }
 
-  .cad-tool-button {
-    width: 40px;
-    height: 40px;
+  .rail-button {
+    width: 54px;
+    min-height: 54px;
+    padding: 6px 5px;
+  }
+
+  .rail-button-label {
+    font-size: 9px;
   }
 
   .editor-inspector {
@@ -779,22 +814,6 @@ button {
   .editor-axis-overlay {
     left: 20px;
     bottom: 18px;
-  }
-
-  .editor-viewport-hud {
-    right: 18px;
-    bottom: 18px;
-    gap: 6px;
-    padding: 8px 10px;
-  }
-
-  .viewport-button,
-  .viewport-fit-button {
-    height: 34px;
-  }
-
-  .viewport-zoom-readout {
-    min-width: 48px;
   }
 
   .load-editor-group {
