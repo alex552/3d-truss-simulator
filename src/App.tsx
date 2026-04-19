@@ -1,7 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { AnalysisPanel } from './components/AnalysisPanel'
 import { Editor2D } from './components/Editor2D'
-import { Truss3DView } from './components/Truss3DView'
 import { analyzeTruss } from './lib/analysis'
 import { DEFAULT_MEMBER_AXIAL_STIFFNESS_KN } from './lib/truss-model'
 import { PIXELS_PER_METER } from './constants'
@@ -25,7 +23,6 @@ export default function App() {
   const [members, setMembers] = useState<Member[]>([])
   const [memberStartNodeId, setMemberStartNodeId] = useState<string | null>(null)
   const [selectedEntity, setSelectedEntity] = useState<SelectedEntity>(null)
-  const [show3D, setShow3D] = useState(true)
   const [activeTool, setActiveTool] = useState<EditorTool>('member')
 
   const createNode = (x: number, y: number): Node2D => ({
@@ -296,25 +293,7 @@ export default function App() {
   }, [selectedEntity])
 
   return (
-    <main className="app-shell">
-      <section className="hero">
-        <div>
-          <h1>Truss Playground</h1>
-          <p>Sketch a truss on the X/Z plane, add supports, then inspect it in 3D.</p>
-        </div>
-
-        <div className="hero-actions">
-          <button
-            type="button"
-            className="view-button"
-            onClick={() => setShow3D((currentValue) => !currentValue)}
-          >
-            {show3D ? 'Hide 3D View' : 'Show 3D View'}
-          </button>
-        </div>
-      </section>
-
-      <section className={show3D ? 'workspace workspace-two-up' : 'workspace'}>
+    <main className="app-shell app-shell-canvas">
         <Editor2D
           nodes={nodes}
           members={members}
@@ -335,16 +314,6 @@ export default function App() {
           onDeleteNode={handleDeleteNode}
           onDeleteMember={handleDeleteMember}
         />
-
-        {show3D ? <Truss3DView nodes={nodes} members={members} /> : null}
-      </section>
-
-      <AnalysisPanel
-        analysis={analysis}
-        nodes={nodes}
-        members={members}
-        displacementDisplayScale={displacementDisplayScale}
-      />
     </main>
   )
 }

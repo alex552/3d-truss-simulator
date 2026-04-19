@@ -113,10 +113,15 @@ export function Editor2D({
     panX: 0,
     panY: 0,
   })
+  const [canvasSize, setCanvasSize] = useState({
+    width: EDITOR_WIDTH,
+    height: EDITOR_HEIGHT,
+  })
   const [isSpacePressed, setIsSpacePressed] = useState(false)
   const [isPanning, setIsPanning] = useState(false)
 
   const viewportRef = useRef(viewport)
+  const canvasShellRef = useRef<HTMLDivElement | null>(null)
   const svgRef = useRef<SVGSVGElement | null>(null)
   const dragNodeIdRef = useRef<string | null>(null)
   const dragMovedRef = useRef(false)
@@ -189,8 +194,8 @@ export function Editor2D({
     element: SVGSVGElement,
   ): Point => {
     const rect = element.getBoundingClientRect()
-    const scaleX = EDITOR_WIDTH / rect.width
-    const scaleY = EDITOR_HEIGHT / rect.height
+    const scaleX = canvasSize.width / rect.width
+    const scaleY = canvasSize.height / rect.height
 
     return {
       x: (clientX - rect.left) * scaleX,
@@ -257,12 +262,12 @@ export function Editor2D({
     const contentHeight = Math.max(maxY - minY, GRID_SIZE_PX * 4)
     const nextZoom = clampZoom(
       Math.min(
-        EDITOR_WIDTH / (contentWidth + padding * 2),
-        EDITOR_HEIGHT / (contentHeight + padding * 2),
+        canvasSize.width / (contentWidth + padding * 2),
+        canvasSize.height / (contentHeight + padding * 2),
       ),
     )
-    const visibleWidth = EDITOR_WIDTH / nextZoom
-    const visibleHeight = EDITOR_HEIGHT / nextZoom
+    const visibleWidth = canvasSize.width / nextZoom
+    const visibleHeight = canvasSize.height / nextZoom
     const centerX = (minX + maxX) / 2
     const centerY = (minY + maxY) / 2
 
@@ -311,12 +316,43 @@ export function Editor2D({
   const visibleWorldBounds = useMemo(
     () => ({
       minX: viewport.panX,
-      maxX: viewport.panX + EDITOR_WIDTH / viewport.zoom,
+      maxX: viewport.panX + canvasSize.width / viewport.zoom,
       minY: viewport.panY,
-      maxY: viewport.panY + EDITOR_HEIGHT / viewport.zoom,
+      maxY: viewport.panY + canvasSize.height / viewport.zoom,
     }),
-    [viewport.panX, viewport.panY, viewport.zoom],
+    [canvasSize.height, canvasSize.width, viewport.panX, viewport.panY, viewport.zoom],
   )
+
+  useEffect(() => {
+    const canvasShell = canvasShellRef.current
+
+    if (!canvasShell) {
+      return
+    }
+
+    const updateCanvasSize = () => {
+      const nextWidth = Math.max(1, Math.round(canvasShell.clientWidth))
+      const nextHeight = Math.max(1, Math.round(canvasShell.clientHeight))
+
+      setCanvasSize((currentSize) =>
+        currentSize.width === nextWidth && currentSize.height === nextHeight
+          ? currentSize
+          : { width: nextWidth, height: nextHeight },
+      )
+    }
+
+    updateCanvasSize()
+
+    const resizeObserver = new ResizeObserver(() => {
+      updateCanvasSize()
+    })
+
+    resizeObserver.observe(canvasShell)
+
+    return () => {
+      resizeObserver.disconnect()
+    }
+  }, [])
 
   const sceneTransform = `matrix(${viewport.zoom} 0 0 ${viewport.zoom} ${-viewport.panX * viewport.zoom} ${-viewport.panY * viewport.zoom})`
 
@@ -511,16 +547,8 @@ export function Editor2D({
   }, [])
 
   return (
-    <div className="panel">
-      <div className="panel-header editor-header">
-        <h2>2D Editor</h2>
-        <p className="editor-subtitle">
-          CAD-style drafting in the X/Z plane with live 3D mirroring.
-        </p>
-      </div>
-
-      <div className="editor-layout">
-        <div className="editor-canvas-shell">
+    <div className="editor-fullscreen">
+      <div ref={canvasShellRef} className="editor-canvas-shell editor-canvas-shell-fullscreen">
           <div className="editor-overlay editor-tool-rail" aria-label="2D editor toolbar">
             {TOOL_OPTIONS.map((tool) => (
               <button
@@ -696,8 +724,8 @@ export function Editor2D({
               className="tool-button viewport-button"
               onClick={() =>
                 zoomAroundScreenPoint(viewport.zoom / ZOOM_STEP, {
-                  x: EDITOR_WIDTH / 2,
-                  y: EDITOR_HEIGHT / 2,
+                  x: canvasSize.width / 2,
+                  y: canvasSize.height / 2,
                 })
               }
               aria-label="Zoom out"
@@ -711,8 +739,8 @@ export function Editor2D({
               className="tool-button viewport-button"
               onClick={() =>
                 zoomAroundScreenPoint(viewport.zoom * ZOOM_STEP, {
-                  x: EDITOR_WIDTH / 2,
-                  y: EDITOR_HEIGHT / 2,
+                  x: canvasSize.width / 2,
+                  y: canvasSize.height / 2,
                 })
               }
               aria-label="Zoom in"
@@ -741,7 +769,7 @@ export function Editor2D({
             className={`editor-surface${
               isPanning ? ' is-panning' : isSpacePressed || activeTool === 'drag' ? ' is-pan-ready' : ''
             }`}
-            viewBox={`0 0 ${EDITOR_WIDTH} ${EDITOR_HEIGHT}`}
+            viewBox={`0 0 ${canvasSize.width} ${canvasSize.height}`}
             onMouseDown={handleCanvasMouseDown}
             onClick={handleCanvasClick}
             onMouseMove={handleMouseMove}
@@ -773,8 +801,16 @@ export function Editor2D({
               </marker>
             </defs>
 
-            <rect x="0" y="0" width={EDITOR_WIDTH} height={EDITOR_HEIGHT} className="editor-grid-background" />
+            <rect
+              x="0"
+              y="0"
+              width={canvasSize.width}
+              height={canvasSize.height}
+              className="editor-grid-background"
+            />
             <ViewportGrid
+              width={canvasSize.width}
+              height={canvasSize.height}
               minX={visibleWorldBounds.minX}
               maxX={visibleWorldBounds.maxX}
               minY={visibleWorldBounds.minY}
@@ -920,23 +956,14 @@ export function Editor2D({
               ))}
             </g>
           </svg>
-        </div>
-
-        <p className="editor-status-strip">
-          {activeTool === 'member'
-            ? 'Member tool: click a start point on a node or empty space, then click the end point to create the member. Use the mouse wheel to zoom and middle-mouse or Space+drag to pan.'
-            : activeTool === 'node'
-              ? 'Node tool: click anywhere in the 2D view to place a standalone node on the 0.1 m grid. Use the mouse wheel to zoom and middle-mouse or Space+drag to pan.'
-              : activeTool === 'drag'
-                ? 'Drag tool: click and drag to pan the 2D view. Use the mouse wheel to zoom, or middle-mouse and Space+drag as alternate pan gestures.'
-              : 'Select tool: click a node or member to select it, drag a node with 0.1 m snap, and press Delete or Backspace to remove the selected item. Use the mouse wheel to zoom and middle-mouse or Space+drag to pan.'}
-        </p>
       </div>
     </div>
   )
 }
 
 function ViewportGrid({
+  width,
+  height,
   minX,
   maxX,
   minY,
@@ -945,6 +972,8 @@ function ViewportGrid({
   panX,
   panY,
 }: {
+  width: number
+  height: number
   minX: number
   maxX: number
   minY: number
@@ -979,7 +1008,7 @@ function ViewportGrid({
           x1={(x - panX) * zoom}
           y1={0}
           x2={(x - panX) * zoom}
-          y2={EDITOR_HEIGHT}
+          y2={height}
           className="editor-grid-line editor-grid-line-minor"
         />,
       )
@@ -999,7 +1028,7 @@ function ViewportGrid({
           key={`minor-y-${y}`}
           x1={0}
           y1={(y - panY) * zoom}
-          x2={EDITOR_WIDTH}
+          x2={width}
           y2={(y - panY) * zoom}
           className="editor-grid-line editor-grid-line-minor"
         />,
@@ -1018,7 +1047,7 @@ function ViewportGrid({
         x1={(x - panX) * zoom}
         y1={0}
         x2={(x - panX) * zoom}
-        y2={EDITOR_HEIGHT}
+        y2={height}
         className="editor-grid-line editor-grid-line-major"
       />,
     )
@@ -1034,7 +1063,7 @@ function ViewportGrid({
         key={`major-y-${y}`}
         x1={0}
         y1={(y - panY) * zoom}
-        x2={EDITOR_WIDTH}
+        x2={width}
         y2={(y - panY) * zoom}
         className="editor-grid-line editor-grid-line-major"
       />,
