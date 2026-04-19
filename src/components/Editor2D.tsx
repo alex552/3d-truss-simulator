@@ -87,22 +87,6 @@ const SUPPORT_OPTIONS: { value: SupportType | undefined; label: string; title: s
   { value: 'roller-z', label: 'Roller Z support', title: 'Roller Z' },
 ]
 
-function getActiveToolLabel(tool: EditorTool) {
-  if (tool === 'select') {
-    return 'Select'
-  }
-
-  if (tool === 'drag') {
-    return 'Pan'
-  }
-
-  if (tool === 'node') {
-    return 'Node'
-  }
-
-  return 'Member'
-}
-
 export function Editor2D({
   nodes,
   members,
@@ -577,17 +561,19 @@ export function Editor2D({
                       : 'tool-button rail-button cad-tool-button'
                   }
                   onClick={() => onSetActiveTool(tool.value)}
+                  data-tooltip={tool.title}
                   aria-label={tool.label}
                   title={tool.title}
                 >
                   <ToolIcon tool={tool.value} />
-                  <span className="rail-button-label">{getActiveToolLabel(tool.value)}</span>
                 </button>
                 {tool.value === 'drag' ? <div className="tool-cluster-divider" aria-hidden="true" /> : null}
               </div>
             ))}
           </div>
+        </div>
 
+        <div className="editor-overlay editor-zoom-rail" aria-label="Viewport controls">
           <div className="editor-tool-cluster">
             <button
               type="button"
@@ -598,11 +584,11 @@ export function Editor2D({
                   y: canvasSize.height / 2,
                 })
               }
+              data-tooltip="Zoom out"
               aria-label="Zoom out"
               title="Zoom out"
             >
               <ViewControlIcon action="zoom-out" />
-              <span className="rail-button-label">Out</span>
             </button>
 
             <button
@@ -614,11 +600,11 @@ export function Editor2D({
                   y: canvasSize.height / 2,
                 })
               }
+              data-tooltip="Zoom in"
               aria-label="Zoom in"
               title="Zoom in"
             >
               <ViewControlIcon action="zoom-in" />
-              <span className="rail-button-label">In</span>
             </button>
 
             <div className="tool-cluster-divider" aria-hidden="true" />
@@ -627,29 +613,23 @@ export function Editor2D({
               type="button"
               className="tool-button rail-button viewport-rail-button"
               onClick={fitViewportToModel}
+              data-tooltip="Fit model to view"
               aria-label="Fit model to view"
               title="Fit model to view"
             >
               <ViewControlIcon action="fit" />
-              <span className="rail-button-label">Fit</span>
             </button>
 
             <button
               type="button"
               className="tool-button rail-button viewport-rail-button"
               onClick={resetViewport}
+              data-tooltip="Reset viewport"
               aria-label="Reset viewport"
               title="Reset viewport"
             >
               <ViewControlIcon action="reset" />
-              <span className="rail-button-label">1:1</span>
             </button>
-          </div>
-
-          <div className="editor-tool-cluster editor-tool-cluster-status" aria-hidden="true">
-            <span className="editor-rail-status-label">Mode</span>
-            <strong className="editor-rail-status-value">{getActiveToolLabel(activeTool)}</strong>
-            <span className="editor-rail-status-meta">{Math.round(viewport.zoom * 100)}%</span>
           </div>
         </div>
 
@@ -1116,7 +1096,7 @@ function ToolIcon({ tool }: { tool: EditorTool }) {
   if (tool === 'select') {
     return (
       <svg viewBox="0 0 24 24" className="tool-icon" aria-hidden="true">
-        <path d="M6 4 L16 14 L11.2 14.2 L13.4 20 L10.5 21 L8.4 15.1 L5 18 Z" />
+        <path d="M6 3.5 L16.2 13.8 L11.2 14.2 L13.7 20.2 L10.9 21.3 L8.4 15.3 L4.8 18.7 Z" />
       </svg>
     )
   }
@@ -1124,14 +1104,15 @@ function ToolIcon({ tool }: { tool: EditorTool }) {
   if (tool === 'drag') {
     return (
       <svg viewBox="0 0 24 24" className="tool-icon" aria-hidden="true">
-        <path d="M12 3 V11" />
-        <path d="M8.5 6.5 L12 3 L15.5 6.5" />
-        <path d="M12 11 V19" />
-        <path d="M8.5 17.5 L12 21 L15.5 17.5" />
-        <path d="M5 12 H13" />
-        <path d="M8.5 8.5 L5 12 L8.5 15.5" />
-        <path d="M13 12 H21" />
-        <path d="M17.5 8.5 L21 12 L17.5 15.5" />
+        <path d="M12 3 V9" />
+        <path d="M9 6 L12 3 L15 6" />
+        <path d="M12 15 V21" />
+        <path d="M9 18 L12 21 L15 18" />
+        <path d="M3 12 H9" />
+        <path d="M6 9 L3 12 L6 15" />
+        <path d="M15 12 H21" />
+        <path d="M18 9 L21 12 L18 15" />
+        <circle cx="12" cy="12" r="2" />
       </svg>
     )
   }
@@ -1139,17 +1120,18 @@ function ToolIcon({ tool }: { tool: EditorTool }) {
   if (tool === 'node') {
     return (
       <svg viewBox="0 0 24 24" className="tool-icon" aria-hidden="true">
-        <circle cx="12" cy="12" r="4" />
-        <path d="M12 4 V7.5 M12 16.5 V20 M4 12 H7.5 M16.5 12 H20" />
+        <circle cx="12" cy="12" r="4.6" />
+        <path d="M12 5 V8 M12 16 V19 M5 12 H8 M16 12 H19" />
       </svg>
     )
   }
 
   return (
     <svg viewBox="0 0 24 24" className="tool-icon" aria-hidden="true">
-      <circle cx="7" cy="16" r="2.3" />
-      <circle cx="17" cy="8" r="2.3" />
-      <path d="M8.8 14.4 L15.2 9.6" />
+      <circle cx="6.5" cy="17" r="2.3" />
+      <circle cx="17.5" cy="7" r="2.3" />
+      <path d="M8.3 15.5 L15.7 8.5" />
+      <path d="M10.8 17.8 H18.5" />
     </svg>
   )
 }
@@ -1158,7 +1140,7 @@ function ViewControlIcon({ action }: { action: 'zoom-in' | 'zoom-out' | 'fit' | 
   if (action === 'zoom-in') {
     return (
       <svg viewBox="0 0 24 24" className="tool-icon" aria-hidden="true">
-        <circle cx="10.5" cy="10.5" r="5.5" />
+        <circle cx="10.5" cy="10.5" r="5.4" />
         <path d="M10.5 8 V13" />
         <path d="M8 10.5 H13" />
         <path d="M15 15 L20 20" />
@@ -1179,22 +1161,22 @@ function ViewControlIcon({ action }: { action: 'zoom-in' | 'zoom-out' | 'fit' | 
   if (action === 'fit') {
     return (
       <svg viewBox="0 0 24 24" className="tool-icon" aria-hidden="true">
-        <path d="M8 4 H4 V8" />
-        <path d="M16 4 H20 V8" />
-        <path d="M20 16 V20 H16" />
-        <path d="M8 20 H4 V16" />
-        <path d="M9 9 H15 V15 H9 Z" />
+        <path d="M9 4 H4 V9" />
+        <path d="M15 4 H20 V9" />
+        <path d="M20 15 V20 H15" />
+        <path d="M9 20 H4 V15" />
+        <rect x="9" y="9" width="6" height="6" rx="1" />
       </svg>
     )
   }
 
   return (
     <svg viewBox="0 0 24 24" className="tool-icon" aria-hidden="true">
-      <circle cx="12" cy="12" r="6.5" />
-      <path d="M12 3.5 V7" />
-      <path d="M12 17 V20.5" />
-      <path d="M3.5 12 H7" />
-      <path d="M17 12 H20.5" />
+      <path d="M8 4 H4 V8" />
+      <path d="M16 4 H20 V8" />
+      <path d="M20 16 V20 H16" />
+      <path d="M8 20 H4 V16" />
+      <path d="M9 9 H15 V15 H9 Z" />
     </svg>
   )
 }
