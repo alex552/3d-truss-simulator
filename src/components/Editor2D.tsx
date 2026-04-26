@@ -43,7 +43,9 @@ type Editor2DProps = {
   onCanvasClick: (x: number, y: number) => void
   onNodeClick: (nodeId: string, additive?: boolean) => void
   onMemberClick: (memberId: string) => void
-  onMoveNode: (nodeId: string, x: number, y: number) => void
+  onBeginNodeMove: (nodeId: string) => void
+  onPreviewNodeMove: (nodeId: string, x: number, y: number) => void
+  onCommitNodeMove: () => void
   onSetActiveTool: (tool: EditorTool) => void
   onSetSelectedNodeSupport: (support: SupportType | undefined) => void
   onSetSelectedMemberAxialStiffness: (axialStiffnessKn: number) => void
@@ -88,7 +90,9 @@ export function Editor2D({
   onCanvasClick,
   onNodeClick,
   onMemberClick,
-  onMoveNode,
+  onBeginNodeMove,
+  onPreviewNodeMove,
+  onCommitNodeMove,
   onSetActiveTool,
   onSetSelectedNodeSupport,
   onSetSelectedMemberAxialStiffness,
@@ -496,7 +500,7 @@ export function Editor2D({
 
     if (dragNodeIdRef.current) {
       dragMovedRef.current = true
-      onMoveNode(dragNodeIdRef.current, point.x, point.y)
+      onPreviewNodeMove(dragNodeIdRef.current, point.x, point.y)
       return
     }
 
@@ -508,6 +512,10 @@ export function Editor2D({
   const handleMouseUp = () => {
     if (dragMovedRef.current || isPanningRef.current) {
       suppressClickRef.current = true
+    }
+
+    if (dragNodeIdRef.current) {
+      onCommitNodeMove()
     }
 
     dragNodeIdRef.current = null
@@ -825,6 +833,7 @@ export function Editor2D({
 
                       dragNodeIdRef.current = node.id
                       dragMovedRef.current = false
+                      onBeginNodeMove(node.id)
                     }}
                     onClick={(event) => {
                       if (shouldSuppressClick()) {
@@ -836,6 +845,7 @@ export function Editor2D({
 
                       if (dragMovedRef.current) {
                         dragMovedRef.current = false
+                        onCommitNodeMove()
                         return
                       }
 

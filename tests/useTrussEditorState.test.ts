@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  createInitialTrussEditorState,
   initialTrussEditorState,
   trussEditorReducer,
   type TrussEditorAction,
@@ -7,6 +8,20 @@ import {
 } from '../src/editor/useTrussEditorState'
 
 describe('truss editor reducer', () => {
+  it('creates initial state from a restored model without undo history', () => {
+    const restoredState = createInitialTrussEditorState({
+      nodes: [{ id: 'node-1', x: 0, y: 0 }],
+      members: [],
+    })
+
+    expect(restoredState.nodes).toEqual([{ id: 'node-1', x: 0, y: 0 }])
+    expect(restoredState.members).toEqual([])
+    expect(restoredState.undoStack).toEqual([])
+    expect(restoredState.redoStack).toEqual([])
+    expect(restoredState.selectedEntity).toBeNull()
+    expect(restoredState.memberStartNodeId).toBeNull()
+  })
+
   it('creates a node and selects it with the node tool', () => {
     const nodeToolState = reduce(initialTrussEditorState, {
       type: 'set-active-tool',
@@ -175,6 +190,56 @@ describe('truss editor reducer', () => {
     expect(undoneState.redoStack).toHaveLength(1)
     expect(redoneState.nodes).toEqual(editedState.nodes)
     expect(redoneState.undoStack).toHaveLength(1)
+  })
+
+  it('commits a dragged node as one undoable model change', () => {
+    const state = {
+      ...initialTrussEditorState,
+      nodes: [{ id: 'node-1', x: 0, y: 0 }],
+    }
+
+    const dragStartState = reduce(state, {
+      type: 'begin-node-move',
+      nodeId: 'node-1',
+    })
+    const previewState = reduce(dragStartState, {
+      type: 'preview-node-move',
+      nodeId: 'node-1',
+      x: 10,
+      y: 20,
+    })
+    const nextPreviewState = reduce(previewState, {
+      type: 'preview-node-move',
+      nodeId: 'node-1',
+      x: 30,
+      y: 40,
+    })
+    const committedState = reduce(nextPreviewState, { type: 'commit-node-move' })
+    const undoneState = reduce(committedState, { type: 'undo' })
+
+    expect(committedState.nodes).toEqual([{ id: 'node-1', x: 30, y: 40 }])
+    expect(committedState.undoStack).toHaveLength(1)
+    expect(committedState.redoStack).toEqual([])
+    expect(committedState.nodeMoveSession).toBeNull()
+    expect(undoneState.nodes).toEqual(state.nodes)
+  })
+
+  it('does not add undo history for a node drag that never moves', () => {
+    const state = {
+      ...initialTrussEditorState,
+      nodes: [{ id: 'node-1', x: 0, y: 0 }],
+    }
+
+    const dragStartState = reduce(state, {
+      type: 'begin-node-move',
+      nodeId: 'node-1',
+    })
+    const committedState = reduce(dragStartState, { type: 'commit-node-move' })
+
+    expect(committedState.nodes).toEqual(state.nodes)
+    expect(committedState.undoStack).toEqual([])
+    expect(committedState.redoStack).toEqual([])
+    expect(committedState.nodeMoveSession).toBeNull()
   })
 
   it('keeps selected node load direction when magnitude is zero', () => {

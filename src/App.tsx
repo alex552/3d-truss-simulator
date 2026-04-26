@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { Editor2D } from './components/Editor2D'
 import { PIXELS_PER_METER } from './constants'
 import { useTrussEditorState } from './editor/useTrussEditorState'
@@ -7,10 +7,18 @@ import {
   createPersistedModel,
   MODEL_FILE_EXTENSION,
   parsePersistedModel,
+  readSessionModel,
+  writeSessionModel,
 } from './model/truss-persistence'
 
+const SESSION_AUTOSAVE_DELAY_MS = 300
+
 export default function App() {
-  const { state, canUndo, canRedo, actions } = useTrussEditorState()
+  const initialSessionSnapshot = useMemo(
+    () => readSessionModel(getSessionStorage()),
+    [],
+  )
+  const { state, canUndo, canRedo, actions } = useTrussEditorState(initialSessionSnapshot)
   const {
     nodes,
     members,
@@ -21,6 +29,9 @@ export default function App() {
     showForceResults,
     showDeflectionResults,
   } = state
+
+  const latestSessionSnapshotRef = useRef({ nodes, members })
+  latestSessionSnapshotRef.current = { nodes, members }
 
   const analysis = useMemo(() => analyzeTruss(nodes, members), [nodes, members])
 
@@ -34,6 +45,23 @@ export default function App() {
   }, [analysis.maxDisplacementMeters])
 
   const canClearModel = nodes.length > 0 || members.length > 0
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      writeSessionModel(getSessionStorage(), latestSessionSnapshotRef.current)
+    }, SESSION_AUTOSAVE_DELAY_MS)
+
+    return () => window.clearTimeout(timeoutId)
+  }, [members, nodes])
+
+  useEffect(() => {
+    const handlePageHide = () => {
+      writeSessionModel(getSessionStorage(), latestSessionSnapshotRef.current)
+    }
+
+    window.addEventListener('pagehide', handlePageHide)
+    return () => window.removeEventListener('pagehide', handlePageHide)
+  }, [])
 
   const handleSaveModelToFile = () => {
     const blob = new Blob(
@@ -132,7 +160,9 @@ export default function App() {
         onCanvasClick={actions.handleCanvasClick}
         onNodeClick={actions.handleNodeClick}
         onMemberClick={actions.handleMemberClick}
-        onMoveNode={actions.handleMoveNode}
+        onBeginNodeMove={actions.handleBeginNodeMove}
+        onPreviewNodeMove={actions.handlePreviewNodeMove}
+        onCommitNodeMove={actions.handleCommitNodeMove}
         onSetActiveTool={actions.handleSetActiveTool}
         onSetSelectedNodeSupport={actions.handleSetSelectedNodeSupport}
         onSetSelectedMemberAxialStiffness={actions.handleSetSelectedMemberAxialStiffness}
@@ -155,4 +185,16 @@ export default function App() {
       />
     </main>
   )
+}
+
+function getSessionStorage(): Storage | null {
+  if (typeof window === 'undefined') {
+    return null
+  }
+
+  try {
+    return window.sessionStorage
+  } catch {
+    return null
+  }
 }

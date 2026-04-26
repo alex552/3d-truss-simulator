@@ -2,12 +2,15 @@ import type { Member, Node2D } from '../types'
 import type { ModelSnapshot } from './truss-operations'
 
 export const MODEL_FILE_EXTENSION = '.truss.json'
+export const SESSION_MODEL_STORAGE_KEY = 'truss-playground.session-model'
 
 export type PersistedTrussModel = {
   version: 1
   nodes: Node2D[]
   members: Member[]
 }
+
+type SessionModelStorage = Pick<Storage, 'getItem' | 'removeItem' | 'setItem'>
 
 export function createPersistedModel(snapshot: ModelSnapshot): PersistedTrussModel {
   return {
@@ -41,6 +44,45 @@ export function parsePersistedModel(content: string): ModelSnapshot | null {
   return {
     nodes: parsed.nodes,
     members: parsed.members,
+  }
+}
+
+export function readSessionModel(
+  storage: SessionModelStorage | null | undefined,
+): ModelSnapshot | null {
+  let content: string | null
+
+  try {
+    content = storage?.getItem(SESSION_MODEL_STORAGE_KEY) ?? null
+  } catch {
+    return null
+  }
+
+  if (!content) {
+    return null
+  }
+
+  const snapshot = parsePersistedModel(content)
+
+  if (!snapshot) {
+    try {
+      storage?.removeItem(SESSION_MODEL_STORAGE_KEY)
+    } catch {
+      // Ignore storage cleanup failures; recovery should never block editing.
+    }
+  }
+
+  return snapshot
+}
+
+export function writeSessionModel(
+  storage: SessionModelStorage | null | undefined,
+  snapshot: ModelSnapshot,
+) {
+  try {
+    storage?.setItem(SESSION_MODEL_STORAGE_KEY, JSON.stringify(createPersistedModel(snapshot)))
+  } catch {
+    // Ignore quota/privacy failures; explicit file save still works.
   }
 }
 

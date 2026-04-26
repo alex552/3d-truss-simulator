@@ -30,12 +30,19 @@ export type TrussEditorState = ModelSnapshot & {
   showDeflectionResults: boolean
   undoStack: ModelSnapshot[]
   redoStack: ModelSnapshot[]
+  nodeMoveSession: {
+    nodeId: string
+    snapshot: ModelSnapshot
+  } | null
 }
 
 export type TrussEditorAction =
   | { type: 'canvas-click'; x: number; y: number; nodeId: string; memberId: string }
   | { type: 'node-click'; nodeId: string; memberId: string; additive?: boolean }
   | { type: 'member-click'; memberId: string }
+  | { type: 'begin-node-move'; nodeId: string }
+  | { type: 'preview-node-move'; nodeId: string; x: number; y: number }
+  | { type: 'commit-node-move' }
   | { type: 'move-node'; nodeId: string; x: number; y: number }
   | { type: 'delete-node'; nodeId: string }
   | { type: 'delete-member'; memberId: string }
@@ -72,6 +79,21 @@ export const initialTrussEditorState: TrussEditorState = {
   showDeflectionResults: true,
   undoStack: [],
   redoStack: [],
+  nodeMoveSession: null,
+}
+
+export function createInitialTrussEditorState(
+  snapshot: ModelSnapshot | null | undefined,
+): TrussEditorState {
+  if (!snapshot) {
+    return initialTrussEditorState
+  }
+
+  return {
+    ...initialTrussEditorState,
+    nodes: snapshot.nodes,
+    members: snapshot.members,
+  }
 }
 
 export function trussEditorReducer(
@@ -185,6 +207,53 @@ export function trussEditorReducer(
       }
     }
 
+    case 'begin-node-move':
+      if (!state.nodes.some((node) => node.id === action.nodeId)) {
+        return state
+      }
+
+      return {
+        ...state,
+        nodeMoveSession: {
+          nodeId: action.nodeId,
+          snapshot: pickSnapshot(state),
+        },
+      }
+
+    case 'preview-node-move': {
+      if (state.nodeMoveSession?.nodeId !== action.nodeId) {
+        return state
+      }
+
+      const node = state.nodes.find((candidate) => candidate.id === action.nodeId)
+      if (!node || (node.x === action.x && node.y === action.y)) {
+        return state
+      }
+
+      return {
+        ...state,
+        nodes: moveNode(state.nodes, action.nodeId, action.x, action.y),
+      }
+    }
+
+    case 'commit-node-move': {
+      const nodeMoveSession = state.nodeMoveSession
+      if (!nodeMoveSession) {
+        return state
+      }
+
+      const nextState = {
+        ...state,
+        nodeMoveSession: null,
+      }
+
+      if (areModelSnapshotsEqual(nodeMoveSession.snapshot, pickSnapshot(state))) {
+        return nextState
+      }
+
+      return withUndoSnapshot(nextState, nodeMoveSession.snapshot)
+    }
+
     case 'move-node':
       return withHistory(state, {
         ...state,
@@ -282,6 +351,7 @@ export function trussEditorReducer(
         memberStartNodeId: null,
         selectedEntity: null,
         selectedNodeIds: [],
+        nodeMoveSession: null,
       })
 
     case 'set-selected-node-support': {
@@ -372,6 +442,7 @@ export function trussEditorReducer(
         memberStartNodeId: null,
         selectedEntity: null,
         selectedNodeIds: [],
+        nodeMoveSession: null,
       }
     }
 
@@ -390,6 +461,7 @@ export function trussEditorReducer(
         memberStartNodeId: null,
         selectedEntity: null,
         selectedNodeIds: [],
+        nodeMoveSession: null,
       }
     }
 
@@ -410,8 +482,12 @@ export function trussEditorReducer(
   }
 }
 
-export function useTrussEditorState() {
-  const [state, dispatch] = useReducer(trussEditorReducer, initialTrussEditorState)
+export function useTrussEditorState(initialSnapshot?: ModelSnapshot | null) {
+  const [state, dispatch] = useReducer(
+    trussEditorReducer,
+    initialSnapshot,
+    createInitialTrussEditorState,
+  )
 
   const canUndo = state.undoStack.length > 0
   const canRedo = state.redoStack.length > 0
@@ -434,8 +510,10 @@ export function useTrussEditorState() {
           additive,
         }),
       handleMemberClick: (memberId: string) => dispatch({ type: 'member-click', memberId }),
-      handleMoveNode: (nodeId: string, x: number, y: number) =>
-        dispatch({ type: 'move-node', nodeId, x, y }),
+      handleBeginNodeMove: (nodeId: string) => dispatch({ type: 'begin-node-move', nodeId }),
+      handlePreviewNodeMove: (nodeId: string, x: number, y: number) =>
+        dispatch({ type: 'preview-node-move', nodeId, x, y }),
+      handleCommitNodeMove: () => dispatch({ type: 'commit-node-move' }),
       handleDeleteNode: (nodeId: string) => dispatch({ type: 'delete-node', nodeId }),
       handleDeleteMember: (memberId: string) => dispatch({ type: 'delete-member', memberId }),
       handleDeleteSelection: () => dispatch({ type: 'delete-selection' }),
@@ -486,10 +564,20 @@ function withHistory(state: TrussEditorState, nextState: TrussEditorState): Trus
     return nextState
   }
 
-  const nextUndoStack = [...state.undoStack, pickSnapshot(state)]
+  return withUndoSnapshot(
+    {
+      ...nextState,
+      nodeMoveSession: null,
+    },
+    pickSnapshot(state),
+  )
+}
+
+function withUndoSnapshot(state: TrussEditorState, snapshot: ModelSnapshot): TrussEditorState {
+  const nextUndoStack = [...state.undoStack, snapshot]
 
   return {
-    ...nextState,
+    ...state,
     undoStack:
       nextUndoStack.length <= MAX_HISTORY_STEPS
         ? nextUndoStack
@@ -532,4 +620,61 @@ function pickSnapshot(snapshot: ModelSnapshot): ModelSnapshot {
     nodes: snapshot.nodes,
     members: snapshot.members,
   }
+}
+
+function areModelSnapshotsEqual(snapshotA: ModelSnapshot, snapshotB: ModelSnapshot) {
+  return (
+    snapshotA.nodes.length === snapshotB.nodes.length &&
+    snapshotA.members.length === snapshotB.members.length &&
+    snapshotA.nodes.every((nodeA, index) => areNodesEqual(nodeA, snapshotB.nodes[index])) &&
+    snapshotA.members.every((memberA, index) => areMembersEqual(memberA, snapshotB.members[index]))
+  )
+}
+
+function areNodesEqual(
+  nodeA: ModelSnapshot['nodes'][number],
+  nodeB: ModelSnapshot['nodes'][number] | undefined,
+) {
+  if (!nodeB) {
+    return false
+  }
+
+  return (
+    nodeA.id === nodeB.id &&
+    nodeA.x === nodeB.x &&
+    nodeA.y === nodeB.y &&
+    nodeA.support === nodeB.support &&
+    areHorizontalLoadsEqual(nodeA.horizontalLoad, nodeB.horizontalLoad) &&
+    areVerticalLoadsEqual(nodeA.verticalLoad, nodeB.verticalLoad)
+  )
+}
+
+function areMembersEqual(
+  memberA: ModelSnapshot['members'][number],
+  memberB: ModelSnapshot['members'][number] | undefined,
+) {
+  if (!memberB) {
+    return false
+  }
+
+  return (
+    memberA.id === memberB.id &&
+    memberA.nodeAId === memberB.nodeAId &&
+    memberA.nodeBId === memberB.nodeBId &&
+    memberA.axialStiffnessKn === memberB.axialStiffnessKn
+  )
+}
+
+function areHorizontalLoadsEqual(
+  loadA: ModelSnapshot['nodes'][number]['horizontalLoad'],
+  loadB: ModelSnapshot['nodes'][number]['horizontalLoad'],
+) {
+  return loadA?.magnitudeKn === loadB?.magnitudeKn && loadA?.direction === loadB?.direction
+}
+
+function areVerticalLoadsEqual(
+  loadA: ModelSnapshot['nodes'][number]['verticalLoad'],
+  loadB: ModelSnapshot['nodes'][number]['verticalLoad'],
+) {
+  return loadA?.magnitudeKn === loadB?.magnitudeKn && loadA?.direction === loadB?.direction
 }
