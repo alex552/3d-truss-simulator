@@ -38,6 +38,8 @@ export type TrussEditorAction =
   | { type: 'delete-node'; nodeId: string }
   | { type: 'delete-member'; memberId: string }
   | { type: 'set-active-tool'; tool: EditorTool }
+  | { type: 'cancel-member-drawing' }
+  | { type: 'clear-model' }
   | { type: 'set-selected-node-support'; support: SupportType | undefined }
   | { type: 'set-selected-member-axial-stiffness'; axialStiffnessKn: number }
   | {
@@ -203,6 +205,29 @@ export function trussEditorReducer(
         memberStartNodeId: action.tool !== 'member' ? null : state.memberStartNodeId,
       }
 
+    case 'cancel-member-drawing':
+      return {
+        ...state,
+        memberStartNodeId: null,
+      }
+
+    case 'clear-model':
+      if (state.nodes.length === 0 && state.members.length === 0) {
+        return {
+          ...state,
+          memberStartNodeId: null,
+          selectedEntity: null,
+        }
+      }
+
+      return withHistory(state, {
+        ...state,
+        nodes: [],
+        members: [],
+        memberStartNodeId: null,
+        selectedEntity: null,
+      })
+
     case 'set-selected-node-support':
       if (state.selectedEntity?.type !== 'node') {
         return state
@@ -345,6 +370,8 @@ export function useTrussEditorState() {
       handleDeleteNode: (nodeId: string) => dispatch({ type: 'delete-node', nodeId }),
       handleDeleteMember: (memberId: string) => dispatch({ type: 'delete-member', memberId }),
       handleSetActiveTool: (tool: EditorTool) => dispatch({ type: 'set-active-tool', tool }),
+      handleCancelMemberDrawing: () => dispatch({ type: 'cancel-member-drawing' }),
+      handleClearModel: () => dispatch({ type: 'clear-model' }),
       handleSetSelectedNodeSupport: (support: SupportType | undefined) =>
         dispatch({ type: 'set-selected-node-support', support }),
       handleSetSelectedMemberAxialStiffness: (axialStiffnessKn: number) =>

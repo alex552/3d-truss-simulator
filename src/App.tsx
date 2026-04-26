@@ -32,6 +32,8 @@ export default function App() {
     return maxDisplacementPx > 0 ? 24 / maxDisplacementPx : 0
   }, [analysis.maxDisplacementMeters])
 
+  const canClearModel = nodes.length > 0 || members.length > 0
+
   const handleSaveModelToFile = () => {
     const blob = new Blob(
       [JSON.stringify(createPersistedModel({ nodes, members }), null, 2)],
@@ -68,15 +70,38 @@ export default function App() {
     actions.handleLoadModel(snapshot)
   }
 
+  const handleClearModel = () => {
+    if (!canClearModel) {
+      return
+    }
+
+    const shouldClear = window.confirm('Clear all nodes, members, supports, and loads?')
+    if (!shouldClear) {
+      return
+    }
+
+    actions.handleClearModel()
+  }
+
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Delete' && event.key !== 'Backspace') {
+      if (event.key !== 'Delete' && event.key !== 'Backspace' && event.key !== 'Escape') {
         return
       }
 
       const target = event.target as HTMLElement | null
       const tagName = target?.tagName ?? ''
       if (target?.isContentEditable || tagName === 'INPUT' || tagName === 'TEXTAREA') {
+        return
+      }
+
+      if (event.key === 'Escape') {
+        if (!memberStartNodeId) {
+          return
+        }
+
+        event.preventDefault()
+        actions.handleCancelMemberDrawing()
         return
       }
 
@@ -96,7 +121,7 @@ export default function App() {
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [actions, selectedEntity])
+  }, [actions, memberStartNodeId, selectedEntity])
 
   return (
     <main className="app-shell app-shell-canvas">
@@ -125,10 +150,12 @@ export default function App() {
         onToggleShowDeflectionResults={actions.handleToggleShowDeflectionResults}
         canUndo={canUndo}
         canRedo={canRedo}
+        canClearModel={canClearModel}
         onUndo={actions.handleUndo}
         onRedo={actions.handleRedo}
         onSaveModel={handleSaveModelToFile}
         onLoadModel={handleLoadModelFromFile}
+        onClearModel={handleClearModel}
       />
     </main>
   )

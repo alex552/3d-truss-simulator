@@ -53,6 +53,57 @@ describe('truss editor reducer', () => {
     expect(nextState.selectedEntity).toBeNull()
   })
 
+  it('cancels in-progress member drawing without changing history', () => {
+    const state = {
+      ...initialTrussEditorState,
+      nodes: [
+        { id: 'node-1', x: 0, y: 0 },
+        { id: 'node-2', x: 10, y: 0 },
+      ],
+      memberStartNodeId: 'node-1',
+      selectedEntity: { type: 'node' as const, id: 'node-1' },
+    }
+
+    const nextState = reduce(state, { type: 'cancel-member-drawing' })
+
+    expect(nextState.memberStartNodeId).toBeNull()
+    expect(nextState.nodes).toBe(state.nodes)
+    expect(nextState.members).toBe(state.members)
+    expect(nextState.undoStack).toHaveLength(0)
+    expect(nextState.selectedEntity).toEqual({ type: 'node', id: 'node-1' })
+  })
+
+  it('clears the model and keeps it undoable', () => {
+    const state = {
+      ...initialTrussEditorState,
+      nodes: [
+        { id: 'node-1', x: 0, y: 0 },
+        { id: 'node-2', x: 10, y: 0 },
+      ],
+      members: [
+        {
+          id: 'member-1',
+          nodeAId: 'node-1',
+          nodeBId: 'node-2',
+          axialStiffnessKn: 1_000_000,
+        },
+      ],
+      memberStartNodeId: 'node-1',
+      selectedEntity: { type: 'member' as const, id: 'member-1' },
+    }
+
+    const nextState = reduce(state, { type: 'clear-model' })
+    const undoneState = reduce(nextState, { type: 'undo' })
+
+    expect(nextState.nodes).toEqual([])
+    expect(nextState.members).toEqual([])
+    expect(nextState.memberStartNodeId).toBeNull()
+    expect(nextState.selectedEntity).toBeNull()
+    expect(nextState.undoStack).toHaveLength(1)
+    expect(undoneState.nodes).toEqual(state.nodes)
+    expect(undoneState.members).toEqual(state.members)
+  })
+
   it('undoes and redoes model changes', () => {
     const nodeToolState = reduce(initialTrussEditorState, {
       type: 'set-active-tool',

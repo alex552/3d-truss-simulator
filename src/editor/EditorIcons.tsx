@@ -8,6 +8,7 @@ import {
   Redo2,
   Save,
   Scan,
+  Trash2,
   Upload,
   Undo2,
   Waypoints,
@@ -19,7 +20,7 @@ import type { EditorTool } from './types'
 export function RailActionIcon({
   action,
 }: {
-  action: 'results-on' | 'results-off' | 'undo' | 'redo' | 'save' | 'load'
+  action: 'results-on' | 'results-off' | 'undo' | 'redo' | 'save' | 'load' | 'clear'
 }) {
   if (action === 'results-on') {
     return <Eye className="tool-icon" aria-hidden="true" />
@@ -41,7 +42,11 @@ export function RailActionIcon({
     return <Save className="tool-icon" aria-hidden="true" />
   }
 
-  return <Upload className="tool-icon" aria-hidden="true" />
+  if (action === 'load') {
+    return <Upload className="tool-icon" aria-hidden="true" />
+  }
+
+  return <Trash2 className="tool-icon" aria-hidden="true" />
 }
 
 export function ToolIcon({ tool }: { tool: EditorTool }) {

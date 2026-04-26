@@ -60,10 +60,12 @@ type Editor2DProps = {
   onToggleShowDeflectionResults: () => void
   canUndo: boolean
   canRedo: boolean
+  canClearModel: boolean
   onUndo: () => void
   onRedo: () => void
   onSaveModel: () => void
   onLoadModel: (file: File | null) => void | Promise<void>
+  onClearModel: () => void
 }
 
 const NODE_RADIUS = 8
@@ -97,10 +99,12 @@ export function Editor2D({
   onToggleShowDeflectionResults,
   canUndo,
   canRedo,
+  canClearModel,
   onUndo,
   onRedo,
   onSaveModel,
   onLoadModel,
+  onClearModel,
 }: Editor2DProps) {
   const [previewPoint, setPreviewPoint] = useState<Point | null>(null)
   const {
@@ -527,6 +531,7 @@ export function Editor2D({
           isResultsMenuOpen={isResultsMenuOpen}
           canUndo={canUndo}
           canRedo={canRedo}
+          canClearModel={canClearModel}
           onSetActiveTool={onSetActiveTool}
           onSetResultsMenuOpen={setIsResultsMenuOpen}
           onToggleShowForceResults={onToggleShowForceResults}
@@ -535,6 +540,7 @@ export function Editor2D({
           onRedo={onRedo}
           onSaveModel={onSaveModel}
           onRequestLoadModel={() => loadInputRef.current?.click()}
+          onClearModel={onClearModel}
           onZoomOut={() =>
             zoomAroundScreenPoint(viewport.zoom / ZOOM_STEP, {
               x: canvasSize.width / 2,

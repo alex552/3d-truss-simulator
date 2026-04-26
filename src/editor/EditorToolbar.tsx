@@ -29,6 +29,7 @@ export function EditorToolbar({
   isResultsMenuOpen,
   canUndo,
   canRedo,
+  canClearModel,
   onSetActiveTool,
   onSetResultsMenuOpen,
   onToggleShowForceResults,
@@ -37,6 +38,7 @@ export function EditorToolbar({
   onRedo,
   onSaveModel,
   onRequestLoadModel,
+  onClearModel,
   onZoomOut,
   onZoomIn,
   onFitViewport,
@@ -49,6 +51,7 @@ export function EditorToolbar({
   isResultsMenuOpen: boolean
   canUndo: boolean
   canRedo: boolean
+  canClearModel: boolean
   onSetActiveTool: (tool: EditorTool) => void
   onSetResultsMenuOpen: (isOpen: boolean) => void
   onToggleShowForceResults: () => void
@@ -57,6 +60,7 @@ export function EditorToolbar({
   onRedo: () => void
   onSaveModel: () => void
   onRequestLoadModel: () => void
+  onClearModel: () => void
   onZoomOut: () => void
   onZoomIn: () => void
   onFitViewport: () => void
@@ -211,6 +215,18 @@ export function EditorToolbar({
             tooltip="Load model"
           >
             <RailActionIcon action="load" />
+          </EditorTooltipButton>
+
+          <div className="tool-cluster-divider" aria-hidden="true" />
+
+          <EditorTooltipButton
+            className="tool-button rail-button cad-tool-button"
+            onClick={onClearModel}
+            aria-label="Clear all"
+            disabled={!canClearModel}
+            tooltip="Clear all"
+          >
+            <RailActionIcon action="clear" />
           </EditorTooltipButton>
         </div>
       </div>
