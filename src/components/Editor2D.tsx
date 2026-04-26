@@ -1,28 +1,33 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ChangeEvent } from 'react'
-import type { ReactElement } from 'react'
 import type { MouseEvent } from 'react'
 import {
   EDITOR_HEIGHT,
   EDITOR_WIDTH,
   GRID_SIZE_PX,
-  PIXELS_PER_METER,
   pixelsToMeters,
-  snapToGrid,
 } from '../constants'
+import { EditorInspector } from '../editor/EditorInspector'
+import {
+  DisplacedShapeOverlay,
+  MemberForceLabel,
+  NodeLoads,
+  ReactionOverlay,
+  SupportSymbol,
+} from '../editor/EditorSvgAnnotations'
+import { EditorToolbar } from '../editor/EditorToolbar'
+import { ViewportGrid } from '../editor/ViewportGrid'
+import type { EditorTool, PanSession, Point, SelectedEntity } from '../editor/types'
+import { clampViewportZoom, useEditorViewport } from '../editor/useEditorViewport'
 import { normalizeSupportType, type RuntimeSupportType } from '../lib/truss-model'
 import type {
   HorizontalLoadDirection,
   Member,
-  MemberAnalysisResult,
   Node2D,
-  NodeDisplacement,
-  NodeReaction,
   SupportType,
   TrussAnalysisResult,
   VerticalLoadDirection,
 } from '../types'
-import type { EditorTool, SelectedEntity } from '../App'
 
 type Editor2DProps = {
   nodes: Node2D[]
@@ -61,42 +66,11 @@ type Editor2DProps = {
   onLoadModel: (file: File | null) => void | Promise<void>
 }
 
-type Point = {
-  x: number
-  y: number
-}
-
-type Viewport = {
-  zoom: number
-  panX: number
-  panY: number
-}
-
-type PanSession = {
-  startScreenPoint: Point
-  startPanX: number
-  startPanY: number
-}
-
 const NODE_RADIUS = 8
 const AXIS_MARGIN = 28
-const MIN_ZOOM = 0.35
-const MAX_ZOOM = 3.5
 const ZOOM_STEP = 1.2
 const AUTO_PAN_EDGE_PX = 36
 const AUTO_PAN_SPEED_PX = 16
-const TOOL_OPTIONS: { value: EditorTool; label: string; title: string }[] = [
-  { value: 'select', label: 'Select tool', title: 'Select' },
-  { value: 'drag', label: 'Drag view tool', title: 'Drag view' },
-  { value: 'node', label: 'Node tool', title: 'Place node' },
-  { value: 'member', label: 'Member tool', title: 'Draw member' },
-]
-const SUPPORT_OPTIONS: { value: SupportType | undefined; label: string; title: string }[] = [
-  { value: undefined, label: 'No support', title: 'None' },
-  { value: 'pinned', label: 'Pinned support', title: 'Pinned' },
-  { value: 'roller-x', label: 'Roller X support', title: 'Roller X' },
-  { value: 'roller-z', label: 'Roller Z support', title: 'Roller Z' },
-]
 
 export function Editor2D({
   nodes,
@@ -129,11 +103,16 @@ export function Editor2D({
   onLoadModel,
 }: Editor2DProps) {
   const [previewPoint, setPreviewPoint] = useState<Point | null>(null)
-  const [viewport, setViewportState] = useState<Viewport>({
-    zoom: 1,
-    panX: 0,
-    panY: 0,
-  })
+  const {
+    viewport,
+    viewportRef,
+    updateViewport,
+    updatePan,
+    screenToWorld,
+    snapWorldPoint,
+    zoomAroundScreenPoint,
+    resetViewport,
+  } = useEditorViewport()
   const [canvasSize, setCanvasSize] = useState({
     width: EDITOR_WIDTH,
     height: EDITOR_HEIGHT,
@@ -142,7 +121,6 @@ export function Editor2D({
   const [isPanning, setIsPanning] = useState(false)
   const [isResultsMenuOpen, setIsResultsMenuOpen] = useState(false)
 
-  const viewportRef = useRef(viewport)
   const canvasShellRef = useRef<HTMLDivElement | null>(null)
   const svgRef = useRef<SVGSVGElement | null>(null)
   const resultsMenuRef = useRef<HTMLDivElement | null>(null)
@@ -198,20 +176,9 @@ export function Editor2D({
   const selectedHorizontalLoad = selectedNode?.horizontalLoad
   const selectedVerticalLoad = selectedNode?.verticalLoad
 
-  const horizontalDirectionOptions: HorizontalLoadDirection[] = ['left', 'right']
-  const verticalDirectionOptions: VerticalLoadDirection[] = ['up', 'down']
   const isStableAnalysis =
     analysis.status === 'stable-determinate' || analysis.status === 'stable-indeterminate'
   const showAnyResults = showForceResults || showDeflectionResults
-
-  const updateViewport = (nextViewport: Viewport) => {
-    viewportRef.current = nextViewport
-    setViewportState(nextViewport)
-  }
-
-  const updatePan = (panX: number, panY: number) => {
-    updateViewport({ ...viewportRef.current, panX, panY })
-  }
 
   const getScreenPointFromClient = (
     clientX: number,
@@ -231,44 +198,10 @@ export function Editor2D({
   const getScreenPoint = (event: MouseEvent<SVGSVGElement>): Point =>
     getScreenPointFromClient(event.clientX, event.clientY, event.currentTarget)
 
-  const screenToWorld = (screenPoint: Point, nextViewport = viewportRef.current): Point => ({
-    x: nextViewport.panX + screenPoint.x / nextViewport.zoom,
-    y: nextViewport.panY + screenPoint.y / nextViewport.zoom,
-  })
-
-  const snapWorldPoint = (worldPoint: Point): Point => ({
-    x: snapToGrid(worldPoint.x),
-    y: snapToGrid(worldPoint.y),
-  })
-
   const getSnappedWorldPoint = (
     event: MouseEvent<SVGSVGElement>,
     nextViewport = viewportRef.current,
   ) => snapWorldPoint(screenToWorld(getScreenPoint(event), nextViewport))
-
-  const zoomAroundScreenPoint = (targetZoom: number, screenPoint: Point) => {
-    const nextZoom = clampZoom(targetZoom)
-    const currentViewport = viewportRef.current
-
-    if (Math.abs(nextZoom - currentViewport.zoom) < 1e-6) {
-      return
-    }
-
-    const anchorWorld = screenToWorld(screenPoint, currentViewport)
-    updateViewport({
-      zoom: nextZoom,
-      panX: anchorWorld.x - screenPoint.x / nextZoom,
-      panY: anchorWorld.y - screenPoint.y / nextZoom,
-    })
-  }
-
-  const resetViewport = () => {
-    updateViewport({
-      zoom: 1,
-      panX: 0,
-      panY: 0,
-    })
-  }
 
   const fitViewportToModel = () => {
     if (nodes.length === 0) {
@@ -285,7 +218,7 @@ export function Editor2D({
     const padding = GRID_SIZE_PX * 3
     const contentWidth = Math.max(maxX - minX, GRID_SIZE_PX * 4)
     const contentHeight = Math.max(maxY - minY, GRID_SIZE_PX * 4)
-    const nextZoom = clampZoom(
+    const nextZoom = clampViewportZoom(
       Math.min(
         canvasSize.width / (contentWidth + padding * 2),
         canvasSize.height / (contentHeight + padding * 2),
@@ -619,332 +552,52 @@ export function Editor2D({
         onChange={handleLoadFileInputChange}
       />
       <div ref={canvasShellRef} className="editor-canvas-shell editor-canvas-shell-fullscreen">
-        <div className="editor-overlay editor-side-rail" aria-label="2D editor toolbar">
-          <div className="editor-tool-cluster">
-            {TOOL_OPTIONS.map((tool) => (
-              <div key={tool.value} className="editor-tool-item">
-                <button
-                  type="button"
-                  className={
-                    activeTool === tool.value
-                      ? 'tool-button rail-button cad-tool-button is-active'
-                      : 'tool-button rail-button cad-tool-button'
-                  }
-                  onClick={() => onSetActiveTool(tool.value)}
-                  data-tooltip={tool.title}
-                  aria-label={tool.label}
-                  title={tool.title}
-                >
-                  <ToolIcon tool={tool.value} />
-                </button>
-                {tool.value === 'drag' ? <div className="tool-cluster-divider" aria-hidden="true" /> : null}
-              </div>
-            ))}
-          </div>
+        <EditorToolbar
+          activeTool={activeTool}
+          showAnyResults={showAnyResults}
+          showForceResults={showForceResults}
+          showDeflectionResults={showDeflectionResults}
+          isResultsMenuOpen={isResultsMenuOpen}
+          resultsMenuRef={resultsMenuRef}
+          canUndo={canUndo}
+          canRedo={canRedo}
+          onSetActiveTool={onSetActiveTool}
+          onToggleResultsMenu={() => setIsResultsMenuOpen((currentOpen) => !currentOpen)}
+          onToggleShowForceResults={onToggleShowForceResults}
+          onToggleShowDeflectionResults={onToggleShowDeflectionResults}
+          onUndo={onUndo}
+          onRedo={onRedo}
+          onSaveModel={onSaveModel}
+          onRequestLoadModel={() => loadInputRef.current?.click()}
+          onZoomOut={() =>
+            zoomAroundScreenPoint(viewport.zoom / ZOOM_STEP, {
+              x: canvasSize.width / 2,
+              y: canvasSize.height / 2,
+            })
+          }
+          onZoomIn={() =>
+            zoomAroundScreenPoint(viewport.zoom * ZOOM_STEP, {
+              x: canvasSize.width / 2,
+              y: canvasSize.height / 2,
+            })
+          }
+          onFitViewport={fitViewportToModel}
+          onResetViewport={resetViewport}
+        />
 
-          <div className="editor-tool-cluster" aria-label="Results and history controls">
-            <div className="results-menu-anchor" ref={resultsMenuRef}>
-              <button
-                type="button"
-                className={
-                  isResultsMenuOpen || showAnyResults
-                    ? 'tool-button rail-button cad-tool-button is-active'
-                    : 'tool-button rail-button cad-tool-button'
-                }
-                onClick={() => setIsResultsMenuOpen((currentOpen) => !currentOpen)}
-                data-tooltip="Results options"
-                aria-label="Results options"
-                title="Results options"
-                aria-haspopup="menu"
-                aria-expanded={isResultsMenuOpen}
-              >
-                <RailActionIcon action={showAnyResults ? 'results-on' : 'results-off'} />
-              </button>
-
-              {isResultsMenuOpen ? (
-                <div className="results-submenu" role="menu" aria-label="Result layers">
-                  <button
-                    type="button"
-                    role="menuitemcheckbox"
-                    aria-checked={showForceResults}
-                    className={
-                      showForceResults
-                        ? 'tool-button results-submenu-item is-active'
-                        : 'tool-button results-submenu-item'
-                    }
-                    onClick={onToggleShowForceResults}
-                  >
-                    <span className="results-submenu-check" aria-hidden="true">
-                      {showForceResults ? '✓' : ''}
-                    </span>
-                    Forces
-                  </button>
-
-                  <button
-                    type="button"
-                    role="menuitemcheckbox"
-                    aria-checked={showDeflectionResults}
-                    className={
-                      showDeflectionResults
-                        ? 'tool-button results-submenu-item is-active'
-                        : 'tool-button results-submenu-item'
-                    }
-                    onClick={onToggleShowDeflectionResults}
-                  >
-                    <span className="results-submenu-check" aria-hidden="true">
-                      {showDeflectionResults ? '✓' : ''}
-                    </span>
-                    Deflections
-                  </button>
-                </div>
-              ) : null}
-            </div>
-
-            <div className="tool-cluster-divider" aria-hidden="true" />
-
-            <button
-              type="button"
-              className="tool-button rail-button cad-tool-button"
-              onClick={onUndo}
-              data-tooltip="Undo"
-              aria-label="Undo"
-              title="Undo"
-              disabled={!canUndo}
-            >
-              <RailActionIcon action="undo" />
-            </button>
-
-            <button
-              type="button"
-              className="tool-button rail-button cad-tool-button"
-              onClick={onRedo}
-              data-tooltip="Redo"
-              aria-label="Redo"
-              title="Redo"
-              disabled={!canRedo}
-            >
-              <RailActionIcon action="redo" />
-            </button>
-
-            <div className="tool-cluster-divider" aria-hidden="true" />
-
-            <button
-              type="button"
-              className="tool-button rail-button cad-tool-button"
-              onClick={onSaveModel}
-              data-tooltip="Save model"
-              aria-label="Save model"
-              title="Save model"
-            >
-              <RailActionIcon action="save" />
-            </button>
-
-            <button
-              type="button"
-              className="tool-button rail-button cad-tool-button"
-              onClick={() => loadInputRef.current?.click()}
-              data-tooltip="Load model"
-              aria-label="Load model"
-              title="Load model"
-            >
-              <RailActionIcon action="load" />
-            </button>
-          </div>
-        </div>
-
-        <div className="editor-overlay editor-zoom-rail" aria-label="Viewport controls">
-          <div className="editor-tool-cluster">
-            <button
-              type="button"
-              className="tool-button rail-button viewport-rail-button"
-              onClick={() =>
-                zoomAroundScreenPoint(viewport.zoom / ZOOM_STEP, {
-                  x: canvasSize.width / 2,
-                  y: canvasSize.height / 2,
-                })
-              }
-              data-tooltip="Zoom out"
-              aria-label="Zoom out"
-              title="Zoom out"
-            >
-              <ViewControlIcon action="zoom-out" />
-            </button>
-
-            <button
-              type="button"
-              className="tool-button rail-button viewport-rail-button"
-              onClick={() =>
-                zoomAroundScreenPoint(viewport.zoom * ZOOM_STEP, {
-                  x: canvasSize.width / 2,
-                  y: canvasSize.height / 2,
-                })
-              }
-              data-tooltip="Zoom in"
-              aria-label="Zoom in"
-              title="Zoom in"
-            >
-              <ViewControlIcon action="zoom-in" />
-            </button>
-
-            <div className="tool-cluster-divider" aria-hidden="true" />
-
-            <button
-              type="button"
-              className="tool-button rail-button viewport-rail-button"
-              onClick={fitViewportToModel}
-              data-tooltip="Fit model to view"
-              aria-label="Fit model to view"
-              title="Fit model to view"
-            >
-              <ViewControlIcon action="fit" />
-            </button>
-
-            <button
-              type="button"
-              className="tool-button rail-button viewport-rail-button"
-              onClick={resetViewport}
-              data-tooltip="Reset viewport"
-              aria-label="Reset viewport"
-              title="Reset viewport"
-            >
-              <ViewControlIcon action="reset" />
-            </button>
-          </div>
-        </div>
-
-        {selectedNode ? (
-          <div className="editor-overlay editor-inspector" aria-label="Selected node properties">
-            <div className="inspector-header">
-              <span className="inspector-eyebrow">Node</span>
-              <span className="inspector-title">Selected node</span>
-            </div>
-
-            <div className="node-properties">
-              <div className="inspector-section" aria-label="Selected node supports">
-                <span className="inspector-label">Support</span>
-                <div className="support-chip-group">
-                  {SUPPORT_OPTIONS.map((option) => (
-                    <button
-                      key={option.title}
-                      type="button"
-                      className={
-                        selectedNodeSupport === option.value ||
-                        (selectedNodeSupport === undefined && option.value === undefined)
-                          ? 'tool-button support-chip is-active'
-                          : 'tool-button support-chip'
-                      }
-                      onClick={() => onSetSelectedNodeSupport(option.value)}
-                      aria-label={option.label}
-                      title={option.title}
-                    >
-                      <SupportChipIcon support={option.value} />
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="load-editor-group" aria-label="Node loads">
-                <div className="load-editor">
-                  <span className="load-label">H</span>
-                  <div className="direction-toggle">
-                    {horizontalDirectionOptions.map((direction) => (
-                      <button
-                        key={direction}
-                        type="button"
-                        className={
-                          (selectedHorizontalLoad?.direction ?? 'right') === direction
-                            ? 'tool-button direction-button is-active'
-                            : 'tool-button direction-button'
-                        }
-                        onClick={() =>
-                          onSetSelectedNodeHorizontalLoad(
-                            selectedHorizontalLoad?.magnitudeKn ?? 0,
-                            direction,
-                          )
-                        }
-                        aria-label={`Horizontal load ${direction}`}
-                        title={`Horizontal ${direction}`}
-                      >
-                        {direction === 'left' ? '←' : '→'}
-                      </button>
-                    ))}
-                  </div>
-                  <input
-                    className="load-input"
-                    type="number"
-                    min="0"
-                    step="0.1"
-                    value={selectedHorizontalLoad?.magnitudeKn ?? 0}
-                    onChange={(event) => horizontalMagnitudeChange(event.target.value)}
-                  />
-                  <span className="load-unit">kN</span>
-                </div>
-
-                <div className="load-editor">
-                  <span className="load-label">V</span>
-                  <div className="direction-toggle">
-                    {verticalDirectionOptions.map((direction) => (
-                      <button
-                        key={direction}
-                        type="button"
-                        className={
-                          (selectedVerticalLoad?.direction ?? 'down') === direction
-                            ? 'tool-button direction-button is-active'
-                            : 'tool-button direction-button'
-                        }
-                        onClick={() =>
-                          onSetSelectedNodeVerticalLoad(
-                            selectedVerticalLoad?.magnitudeKn ?? 0,
-                            direction,
-                          )
-                        }
-                        aria-label={`Vertical load ${direction}`}
-                        title={`Vertical ${direction}`}
-                      >
-                        {direction === 'up' ? '↑' : '↓'}
-                      </button>
-                    ))}
-                  </div>
-                  <input
-                    className="load-input"
-                    type="number"
-                    min="0"
-                    step="0.1"
-                    value={selectedVerticalLoad?.magnitudeKn ?? 0}
-                    onChange={(event) => verticalMagnitudeChange(event.target.value)}
-                  />
-                  <span className="load-unit">kN</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        ) : selectedMember ? (
-          <div className="editor-overlay editor-inspector" aria-label="Selected member properties">
-            <div className="inspector-header">
-              <span className="inspector-eyebrow">Member</span>
-              <span className="inspector-title">Selected member</span>
-            </div>
-
-            <div className="member-properties">
-              <div className="load-editor">
-                <span className="load-label">EA</span>
-                <input
-                  className="load-input member-stiffness-input"
-                  type="number"
-                  min="1"
-                  step="1000"
-                  value={selectedMember.axialStiffnessKn}
-                  onChange={(event) =>
-                    onSetSelectedMemberAxialStiffness(
-                      Math.max(1, Number(event.target.value) || selectedMember.axialStiffnessKn),
-                    )
-                  }
-                />
-                <span className="load-unit">kN</span>
-              </div>
-            </div>
-          </div>
-        ) : null}
+        <EditorInspector
+          selectedNode={selectedNode}
+          selectedMember={selectedMember}
+          selectedNodeSupport={selectedNodeSupport}
+          selectedHorizontalLoad={selectedHorizontalLoad}
+          selectedVerticalLoad={selectedVerticalLoad}
+          onSetSelectedNodeSupport={onSetSelectedNodeSupport}
+          onSetSelectedMemberAxialStiffness={onSetSelectedMemberAxialStiffness}
+          onSetSelectedNodeHorizontalLoad={onSetSelectedNodeHorizontalLoad}
+          onSetSelectedNodeVerticalLoad={onSetSelectedNodeVerticalLoad}
+          onHorizontalMagnitudeChange={horizontalMagnitudeChange}
+          onVerticalMagnitudeChange={verticalMagnitudeChange}
+        />
 
         <div className="editor-overlay editor-axis-overlay" aria-hidden="true">
           <svg viewBox="0 0 124 56" className="editor-axis-diagram">
@@ -1159,613 +812,6 @@ export function Editor2D({
   )
 }
 
-function RailActionIcon({
-  action,
-}: {
-  action: 'results-on' | 'results-off' | 'undo' | 'redo' | 'save' | 'load'
-}) {
-  if (action === 'results-on') {
-    return (
-      <svg viewBox="0 0 24 24" className="tool-icon" aria-hidden="true">
-        <path d="M2.5 12 C4.7 8 8 5.8 12 5.8 C16 5.8 19.3 8 21.5 12 C19.3 16 16 18.2 12 18.2 C8 18.2 4.7 16 2.5 12 Z" />
-        <circle cx="12" cy="12" r="3" />
-      </svg>
-    )
-  }
-
-  if (action === 'results-off') {
-    return (
-      <svg viewBox="0 0 24 24" className="tool-icon" aria-hidden="true">
-        <path d="M2.5 12 C4.7 8 8 5.8 12 5.8 C16 5.8 19.3 8 21.5 12 C19.3 16 16 18.2 12 18.2 C8 18.2 4.7 16 2.5 12 Z" />
-        <path d="M4.5 19.5 L19.5 4.5" />
-      </svg>
-    )
-  }
-
-  if (action === 'undo') {
-    return (
-      <svg viewBox="0 0 24 24" className="tool-icon" aria-hidden="true">
-        <path d="M9 6.5 L3.8 11.7 L9 16.9" />
-        <path d="M20.2 17.8 C19.4 13.3 16.3 11.1 11.6 11.1 H4.2" />
-      </svg>
-    )
-  }
-
-  if (action === 'save') {
-    return (
-      <svg viewBox="0 0 24 24" className="tool-icon" aria-hidden="true">
-        <path d="M5 4.5 H16.8 L19.5 7.2 V19.5 H5 Z" />
-        <path d="M8 4.5 V10.5 H15.5 V4.5" />
-        <path d="M8.2 16.2 H16.3" />
-      </svg>
-    )
-  }
-
-  if (action === 'load') {
-    return (
-      <svg viewBox="0 0 24 24" className="tool-icon" aria-hidden="true">
-        <path d="M5 4.5 H16.8 L19.5 7.2 V19.5 H5 Z" />
-        <path d="M12 9.2 V15.3" />
-        <path d="M9.6 12.9 L12 15.3 L14.4 12.9" />
-      </svg>
-    )
-  }
-
-  return (
-    <svg viewBox="0 0 24 24" className="tool-icon" aria-hidden="true">
-      <path d="M15 6.5 L20.2 11.7 L15 16.9" />
-      <path d="M3.8 17.8 C4.6 13.3 7.7 11.1 12.4 11.1 H19.8" />
-    </svg>
-  )
-}
-
-function ViewportGrid({
-  width,
-  height,
-  minX,
-  maxX,
-  minY,
-  maxY,
-  zoom,
-  panX,
-  panY,
-}: {
-  width: number
-  height: number
-  minX: number
-  maxX: number
-  minY: number
-  maxY: number
-  zoom: number
-  panX: number
-  panY: number
-}) {
-  const gridLines: ReactElement[] = []
-  const showMinorLines = GRID_SIZE_PX * zoom >= 10
-  let majorMultiple = 5
-
-  while (GRID_SIZE_PX * majorMultiple * zoom < 56) {
-    majorMultiple *= 2
-  }
-
-  const majorStep = GRID_SIZE_PX * majorMultiple
-
-  if (showMinorLines) {
-    for (
-      let x = Math.floor(minX / GRID_SIZE_PX) * GRID_SIZE_PX;
-      x <= maxX + GRID_SIZE_PX;
-      x += GRID_SIZE_PX
-    ) {
-      if (Math.abs(x / majorStep - Math.round(x / majorStep)) < 0.001) {
-        continue
-      }
-
-      gridLines.push(
-        <line
-          key={`minor-x-${x}`}
-          x1={(x - panX) * zoom}
-          y1={0}
-          x2={(x - panX) * zoom}
-          y2={height}
-          className="editor-grid-line editor-grid-line-minor"
-        />,
-      )
-    }
-
-    for (
-      let y = Math.floor(minY / GRID_SIZE_PX) * GRID_SIZE_PX;
-      y <= maxY + GRID_SIZE_PX;
-      y += GRID_SIZE_PX
-    ) {
-      if (Math.abs(y / majorStep - Math.round(y / majorStep)) < 0.001) {
-        continue
-      }
-
-      gridLines.push(
-        <line
-          key={`minor-y-${y}`}
-          x1={0}
-          y1={(y - panY) * zoom}
-          x2={width}
-          y2={(y - panY) * zoom}
-          className="editor-grid-line editor-grid-line-minor"
-        />,
-      )
-    }
-  }
-
-  for (
-    let x = Math.floor(minX / majorStep) * majorStep;
-    x <= maxX + majorStep;
-    x += majorStep
-  ) {
-    gridLines.push(
-      <line
-        key={`major-x-${x}`}
-        x1={(x - panX) * zoom}
-        y1={0}
-        x2={(x - panX) * zoom}
-        y2={height}
-        className="editor-grid-line editor-grid-line-major"
-      />,
-    )
-  }
-
-  for (
-    let y = Math.floor(minY / majorStep) * majorStep;
-    y <= maxY + majorStep;
-    y += majorStep
-  ) {
-    gridLines.push(
-      <line
-        key={`major-y-${y}`}
-        x1={0}
-        y1={(y - panY) * zoom}
-        x2={width}
-        y2={(y - panY) * zoom}
-        className="editor-grid-line editor-grid-line-major"
-      />,
-    )
-  }
-
-  return <g pointerEvents="none">{gridLines}</g>
-}
-
-function ToolIcon({ tool }: { tool: EditorTool }) {
-  if (tool === 'select') {
-    return (
-      <svg viewBox="0 0 24 24" className="tool-icon" aria-hidden="true">
-        <path d="M6 3.5 L16.2 13.8 L11.2 14.2 L13.7 20.2 L10.9 21.3 L8.4 15.3 L4.8 18.7 Z" />
-      </svg>
-    )
-  }
-
-  if (tool === 'drag') {
-    return (
-      <svg viewBox="0 0 24 24" className="tool-icon" aria-hidden="true">
-        <path d="M12 3 V9" />
-        <path d="M9 6 L12 3 L15 6" />
-        <path d="M12 15 V21" />
-        <path d="M9 18 L12 21 L15 18" />
-        <path d="M3 12 H9" />
-        <path d="M6 9 L3 12 L6 15" />
-        <path d="M15 12 H21" />
-        <path d="M18 9 L21 12 L18 15" />
-        <circle cx="12" cy="12" r="2" />
-      </svg>
-    )
-  }
-
-  if (tool === 'node') {
-    return (
-      <svg viewBox="0 0 24 24" className="tool-icon" aria-hidden="true">
-        <circle cx="12" cy="12" r="4.6" />
-        <path d="M12 5 V8 M12 16 V19 M5 12 H8 M16 12 H19" />
-      </svg>
-    )
-  }
-
-  return (
-    <svg viewBox="0 0 24 24" className="tool-icon" aria-hidden="true">
-      <circle cx="6.5" cy="17" r="2.3" />
-      <circle cx="17.5" cy="7" r="2.3" />
-      <path d="M8.3 15.5 L15.7 8.5" />
-      <path d="M10.8 17.8 H18.5" />
-    </svg>
-  )
-}
-
-function ViewControlIcon({ action }: { action: 'zoom-in' | 'zoom-out' | 'fit' | 'reset' }) {
-  if (action === 'zoom-in') {
-    return (
-      <svg viewBox="0 0 24 24" className="tool-icon" aria-hidden="true">
-        <circle cx="10.5" cy="10.5" r="5.4" />
-        <path d="M10.5 8 V13" />
-        <path d="M8 10.5 H13" />
-        <path d="M15 15 L20 20" />
-      </svg>
-    )
-  }
-
-  if (action === 'zoom-out') {
-    return (
-      <svg viewBox="0 0 24 24" className="tool-icon" aria-hidden="true">
-        <circle cx="10.5" cy="10.5" r="5.5" />
-        <path d="M8 10.5 H13" />
-        <path d="M15 15 L20 20" />
-      </svg>
-    )
-  }
-
-  if (action === 'fit') {
-    return (
-      <svg viewBox="0 0 24 24" className="tool-icon" aria-hidden="true">
-        <path d="M9 4 H4 V9" />
-        <path d="M15 4 H20 V9" />
-        <path d="M20 15 V20 H15" />
-        <path d="M9 20 H4 V15" />
-        <rect x="9" y="9" width="6" height="6" rx="1" />
-      </svg>
-    )
-  }
-
-  return (
-    <svg viewBox="0 0 24 24" className="tool-icon" aria-hidden="true">
-      <path d="M8 4 H4 V8" />
-      <path d="M16 4 H20 V8" />
-      <path d="M20 16 V20 H16" />
-      <path d="M8 20 H4 V16" />
-      <path d="M9 9 H15 V15 H9 Z" />
-    </svg>
-  )
-}
-
-function SupportChipIcon({ support }: { support: SupportType | undefined }) {
-  if (!support) {
-    return (
-      <svg viewBox="0 0 24 24" className="tool-icon support-icon" aria-hidden="true">
-        <path d="M6 6 L18 18 M18 6 L6 18" />
-      </svg>
-    )
-  }
-
-  if (support === 'pinned') {
-    return (
-      <svg viewBox="0 0 24 24" className="tool-icon support-icon" aria-hidden="true">
-        <path d="M12 4 V8" />
-        <path d="M12 8 L6 16 H18 Z" />
-        <path d="M6 18 H18" />
-      </svg>
-    )
-  }
-
-  if (support === 'roller-x') {
-    return (
-      <svg viewBox="0 0 24 24" className="tool-icon support-icon" aria-hidden="true">
-        <path d="M12 3 V7" />
-        <path d="M12 7 L6 13 H18 Z" />
-        <circle cx="9" cy="16.5" r="1.8" />
-        <circle cx="15" cy="16.5" r="1.8" />
-        <path d="M6 20 H18" />
-      </svg>
-    )
-  }
-
-  return (
-    <svg viewBox="0 0 24 24" className="tool-icon support-icon" aria-hidden="true">
-      <path d="M3 12 H7" />
-      <path d="M7 12 L13 6 V18 Z" />
-      <circle cx="16.5" cy="9" r="1.8" />
-      <circle cx="16.5" cy="15" r="1.8" />
-      <path d="M20 6 V18" />
-    </svg>
-  )
-}
-
-function SupportSymbol({ node }: { node: Node2D }) {
-  const support = normalizeSupportType(node.support as RuntimeSupportType | undefined)
-
-  if (!support) {
-    return null
-  }
-
-  const baseY = node.y + 20
-  const rollerXSymbol = (
-    <>
-      <line x1={node.x} y1={node.y + 8} x2={node.x} y2={baseY - 2} className="support-link" />
-      <polygon
-        points={`${node.x},${baseY - 2} ${node.x - 12},${baseY + 10} ${node.x + 12},${baseY + 10}`}
-        className="support-shape"
-      />
-      <circle cx={node.x - 7} cy={baseY + 16} r={4} className="support-wheel" />
-      <circle cx={node.x + 7} cy={baseY + 16} r={4} className="support-wheel" />
-      <line
-        x1={node.x - 16}
-        y1={baseY + 22}
-        x2={node.x + 16}
-        y2={baseY + 22}
-        className="support-base"
-      />
-    </>
-  )
-
-  if (support === 'pinned') {
-    return (
-      <g className="support-symbol" pointerEvents="none">
-        <line x1={node.x} y1={node.y + 8} x2={node.x} y2={baseY - 2} className="support-link" />
-        <polygon
-          points={`${node.x},${baseY - 2} ${node.x - 12},${baseY + 14} ${node.x + 12},${baseY + 14}`}
-          className="support-shape"
-        />
-      </g>
-    )
-  }
-
-  if (support === 'roller-x') {
-    return (
-      <g className="support-symbol" pointerEvents="none">
-        {rollerXSymbol}
-      </g>
-    )
-  }
-
-  return (
-    <g
-      className="support-symbol"
-      pointerEvents="none"
-      transform={`rotate(90 ${node.x + 3} ${node.y + 4})`}
-    >
-      {rollerXSymbol}
-    </g>
-  )
-}
-
-function NodeLoads({ node }: { node: Node2D }) {
-  const loadElements: ReactElement[] = []
-
-  if (node.horizontalLoad) {
-    const arrowLength = clampArrowLength(node.horizontalLoad.magnitudeKn)
-    const direction = node.horizontalLoad.direction === 'left' ? -1 : 1
-    const endX = node.x + direction * arrowLength
-    const offsetY = node.verticalLoad ? node.y - 34 : node.y - 26
-
-    loadElements.push(
-      <g key="horizontal-load" className="node-load" pointerEvents="none">
-        <line x1={node.x} y1={offsetY} x2={endX} y2={offsetY} className="load-arrow-line" />
-        <polygon
-          points={
-            direction === 1
-              ? `${endX},${offsetY} ${endX - 10},${offsetY - 5} ${endX - 10},${offsetY + 5}`
-              : `${endX},${offsetY} ${endX + 10},${offsetY - 5} ${endX + 10},${offsetY + 5}`
-          }
-          className="load-arrow-head"
-        />
-        <text
-          x={(node.x + endX) / 2}
-          y={offsetY - 8}
-          className="load-label-text"
-          textAnchor="middle"
-        >
-          {node.horizontalLoad.magnitudeKn.toFixed(1)} kN
-        </text>
-      </g>,
-    )
-  }
-
-  if (node.verticalLoad) {
-    const arrowLength = clampArrowLength(node.verticalLoad.magnitudeKn)
-    const direction = node.verticalLoad.direction === 'up' ? -1 : 1
-    const endY = node.y + direction * arrowLength
-    const offsetX = node.horizontalLoad ? node.x + 34 : node.x + 26
-
-    loadElements.push(
-      <g key="vertical-load" className="node-load" pointerEvents="none">
-        <line x1={offsetX} y1={node.y} x2={offsetX} y2={endY} className="load-arrow-line" />
-        <polygon
-          points={
-            direction === 1
-              ? `${offsetX},${endY} ${offsetX - 5},${endY - 10} ${offsetX + 5},${endY - 10}`
-              : `${offsetX},${endY} ${offsetX - 5},${endY + 10} ${offsetX + 5},${endY + 10}`
-          }
-          className="load-arrow-head"
-        />
-        <text x={offsetX + 10} y={(node.y + endY) / 2 - 6} className="load-label-text">
-          {node.verticalLoad.magnitudeKn.toFixed(1)} kN
-        </text>
-      </g>,
-    )
-  }
-
-  return <>{loadElements}</>
-}
-
-function clampArrowLength(magnitudeKn: number) {
-  return Math.min(72, Math.max(28, 20 + magnitudeKn * 4))
-}
-
-function DisplacedShapeOverlay({
-  nodes,
-  members,
-  displacementByNodeId,
-  displayScale,
-}: {
-  nodes: Node2D[]
-  members: Member[]
-  displacementByNodeId: Map<string, NodeDisplacement>
-  displayScale: number
-}) {
-  const nodeById = new Map(nodes.map((node) => [node.id, node]))
-
-  return (
-    <g pointerEvents="none">
-      {members.map((member) => {
-        const startNode = nodeById.get(member.nodeAId)
-        const endNode = nodeById.get(member.nodeBId)
-
-        if (!startNode || !endNode) {
-          return null
-        }
-
-        const displacedStart = getDisplacedNodePosition(
-          startNode,
-          displacementByNodeId.get(startNode.id),
-          displayScale,
-        )
-        const displacedEnd = getDisplacedNodePosition(
-          endNode,
-          displacementByNodeId.get(endNode.id),
-          displayScale,
-        )
-
-        return (
-          <line
-            key={member.id}
-            x1={displacedStart.x}
-            y1={displacedStart.y}
-            x2={displacedEnd.x}
-            y2={displacedEnd.y}
-            className="displaced-member-line"
-          />
-        )
-      })}
-    </g>
-  )
-}
-
-function MemberForceLabel({
-  midX,
-  midY,
-  result,
-}: {
-  midX: number
-  midY: number
-  result: MemberAnalysisResult | undefined
-}) {
-  if (!result) {
-    return null
-  }
-
-  return (
-    <text
-      x={midX}
-      y={midY + 16}
-      className={`member-force-label member-force-label-${result.state}`}
-      textAnchor="middle"
-    >
-      {formatSignedKn(result.axialForceKn)}
-    </text>
-  )
-}
-
-function ReactionOverlay({
-  node,
-  reaction,
-}: {
-  node: Node2D
-  reaction: NodeReaction | undefined
-}) {
-  if (!reaction) {
-    return null
-  }
-
-  return (
-    <>
-      {Math.abs(reaction.xKn) > 1e-6 ? (
-        <DirectionalResultArrow
-          startX={node.x}
-          startY={node.y - 18}
-          dx={
-            reaction.xKn > 0
-              ? clampArrowLength(Math.abs(reaction.xKn))
-              : -clampArrowLength(Math.abs(reaction.xKn))
-          }
-          dy={0}
-          label={formatSignedKn(reaction.xKn)}
-          labelDx={0}
-          labelDy={-8}
-        />
-      ) : null}
-      {Math.abs(reaction.zKn) > 1e-6 ? (
-        <DirectionalResultArrow
-          startX={node.x + 18}
-          startY={node.y}
-          dx={0}
-          dy={
-            reaction.zKn > 0
-              ? -clampArrowLength(Math.abs(reaction.zKn))
-              : clampArrowLength(Math.abs(reaction.zKn))
-          }
-          label={formatSignedKn(reaction.zKn)}
-          labelDx={10}
-          labelDy={-4}
-        />
-      ) : null}
-    </>
-  )
-}
-
-function DirectionalResultArrow({
-  startX,
-  startY,
-  dx,
-  dy,
-  label,
-  labelDx,
-  labelDy,
-}: {
-  startX: number
-  startY: number
-  dx: number
-  dy: number
-  label: string
-  labelDx: number
-  labelDy: number
-}) {
-  const endX = startX + dx
-  const endY = startY + dy
-
-  return (
-    <g className="reaction-overlay" pointerEvents="none">
-      <line x1={startX} y1={startY} x2={endX} y2={endY} className="reaction-arrow-line" />
-      <polygon points={getArrowHeadPoints(endX, endY, dx, dy)} className="reaction-arrow-head" />
-      <text
-        x={(startX + endX) / 2 + labelDx}
-        y={(startY + endY) / 2 + labelDy}
-        className="reaction-label-text"
-      >
-        {label}
-      </text>
-    </g>
-  )
-}
-
-function getDisplacedNodePosition(
-  node: Node2D,
-  displacement: NodeDisplacement | undefined,
-  displayScale: number,
-) {
-  return {
-    x: node.x + (displacement?.xMeters ?? 0) * PIXELS_PER_METER * displayScale,
-    y: node.y - (displacement?.zMeters ?? 0) * PIXELS_PER_METER * displayScale,
-  }
-}
-
-function getArrowHeadPoints(endX: number, endY: number, dx: number, dy: number) {
-  if (Math.abs(dx) > Math.abs(dy)) {
-    return dx >= 0
-      ? `${endX},${endY} ${endX - 10},${endY - 5} ${endX - 10},${endY + 5}`
-      : `${endX},${endY} ${endX + 10},${endY - 5} ${endX + 10},${endY + 5}`
-  }
-
-  return dy >= 0
-    ? `${endX},${endY} ${endX - 5},${endY - 10} ${endX + 5},${endY - 10}`
-    : `${endX},${endY} ${endX - 5},${endY + 10} ${endX + 5},${endY + 10}`
-}
-
-function clampZoom(value: number) {
-  return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, value))
-}
-
 function getAutoPanDelta(screenPoint: Point, zoom: number) {
   let screenDx = 0
   let screenDy = 0
@@ -1786,8 +832,4 @@ function getAutoPanDelta(screenPoint: Point, zoom: number) {
     x: screenDx / zoom,
     y: screenDy / zoom,
   }
-}
-
-function formatSignedKn(value: number) {
-  return `${value >= 0 ? '+' : ''}${value.toFixed(2)} kN`
 }

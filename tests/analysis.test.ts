@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { metersToPixels } from '../../constants'
-import { analyzeTruss } from './index'
-import type { Member, Node2D, SupportType } from '../../types'
+import { metersToPixels } from '../src/constants'
+import { analyzeTruss } from '../src/lib/analysis'
+import type { Member, Node2D, SupportType } from '../src/types'
 
 describe('analyzeTruss', () => {
   it('solves a textbook triangular truss with correct reactions and member forces', () => {

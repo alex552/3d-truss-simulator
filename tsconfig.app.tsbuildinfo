@@ -1,1 +1,0 @@
-{"root":["./src/app.tsx","./src/constants.ts","./src/main.tsx","./src/types.ts","./src/components/analysispanel.tsx","./src/components/editor2d.tsx","./src/components/truss3dview.tsx","./src/lib/truss-model.ts","./src/lib/analysis/index.test.ts","./src/lib/analysis/index.ts"],"version":"5.9.3"}
