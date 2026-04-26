@@ -123,7 +123,6 @@ export function Editor2D({
 
   const canvasShellRef = useRef<HTMLDivElement | null>(null)
   const svgRef = useRef<SVGSVGElement | null>(null)
-  const resultsMenuRef = useRef<HTMLDivElement | null>(null)
   const dragNodeIdRef = useRef<string | null>(null)
   const dragMovedRef = useRef(false)
   const suppressClickRef = useRef(false)
@@ -311,38 +310,6 @@ export function Editor2D({
       resizeObserver.disconnect()
     }
   }, [])
-
-  useEffect(() => {
-    if (!isResultsMenuOpen) {
-      return
-    }
-
-    const handlePointerDown = (event: globalThis.MouseEvent) => {
-      if (!resultsMenuRef.current) {
-        return
-      }
-
-      if (resultsMenuRef.current.contains(event.target as Node)) {
-        return
-      }
-
-      setIsResultsMenuOpen(false)
-    }
-
-    const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        setIsResultsMenuOpen(false)
-      }
-    }
-
-    window.addEventListener('mousedown', handlePointerDown)
-    window.addEventListener('keydown', handleEscape)
-
-    return () => {
-      window.removeEventListener('mousedown', handlePointerDown)
-      window.removeEventListener('keydown', handleEscape)
-    }
-  }, [isResultsMenuOpen])
 
   const sceneTransform = `matrix(${viewport.zoom} 0 0 ${viewport.zoom} ${-viewport.panX * viewport.zoom} ${-viewport.panY * viewport.zoom})`
 
@@ -558,11 +525,10 @@ export function Editor2D({
           showForceResults={showForceResults}
           showDeflectionResults={showDeflectionResults}
           isResultsMenuOpen={isResultsMenuOpen}
-          resultsMenuRef={resultsMenuRef}
           canUndo={canUndo}
           canRedo={canRedo}
           onSetActiveTool={onSetActiveTool}
-          onToggleResultsMenu={() => setIsResultsMenuOpen((currentOpen) => !currentOpen)}
+          onSetResultsMenuOpen={setIsResultsMenuOpen}
           onToggleShowForceResults={onToggleShowForceResults}
           onToggleShowDeflectionResults={onToggleShowDeflectionResults}
           onUndo={onUndo}

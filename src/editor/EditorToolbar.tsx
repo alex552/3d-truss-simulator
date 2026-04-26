@@ -1,4 +1,18 @@
-import type { RefObject } from 'react'
+import {
+  autoUpdate,
+  flip,
+  FloatingPortal,
+  offset,
+  shift,
+  useClick,
+  useDismiss,
+  useFloating,
+  useFocus,
+  useHover,
+  useInteractions,
+  useRole,
+} from '@floating-ui/react'
+import { useState, type ButtonHTMLAttributes, type ReactNode } from 'react'
 import { RailActionIcon, ToolIcon, ViewControlIcon } from './EditorIcons'
 import type { EditorTool } from './types'
 
@@ -9,17 +23,70 @@ const TOOL_OPTIONS: { value: EditorTool; label: string; title: string }[] = [
   { value: 'member', label: 'Member tool', title: 'Draw member' },
 ]
 
+function ToolbarButton({
+  tooltip,
+  children,
+  disabled,
+  ...buttonProps
+}: ButtonHTMLAttributes<HTMLButtonElement> & {
+  tooltip: string
+  children: ReactNode
+}) {
+  const [isTooltipOpen, setIsTooltipOpen] = useState(false)
+  const { refs, floatingStyles, context } = useFloating({
+    open: isTooltipOpen,
+    onOpenChange: setIsTooltipOpen,
+    placement: 'right',
+    whileElementsMounted: autoUpdate,
+    middleware: [
+      offset(8),
+      flip({ fallbackPlacements: ['left', 'top', 'bottom'] }),
+      shift({ padding: 8 }),
+    ],
+  })
+  const hover = useHover(context, {
+    enabled: !disabled,
+    delay: { open: 250, close: 0 },
+  })
+  const focus = useFocus(context, { enabled: !disabled })
+  const { getReferenceProps, getFloatingProps } = useInteractions([hover, focus])
+
+  return (
+    <>
+      <button
+        ref={refs.setReference}
+        type="button"
+        disabled={disabled}
+        {...getReferenceProps(buttonProps)}
+      >
+        {children}
+      </button>
+      {isTooltipOpen ? (
+        <FloatingPortal>
+          <div
+            ref={refs.setFloating}
+            className="floating-tooltip"
+            style={floatingStyles}
+            {...getFloatingProps()}
+          >
+            {tooltip}
+          </div>
+        </FloatingPortal>
+      ) : null}
+    </>
+  )
+}
+
 export function EditorToolbar({
   activeTool,
   showAnyResults,
   showForceResults,
   showDeflectionResults,
   isResultsMenuOpen,
-  resultsMenuRef,
   canUndo,
   canRedo,
   onSetActiveTool,
-  onToggleResultsMenu,
+  onSetResultsMenuOpen,
   onToggleShowForceResults,
   onToggleShowDeflectionResults,
   onUndo,
@@ -36,11 +103,10 @@ export function EditorToolbar({
   showForceResults: boolean
   showDeflectionResults: boolean
   isResultsMenuOpen: boolean
-  resultsMenuRef: RefObject<HTMLDivElement | null>
   canUndo: boolean
   canRedo: boolean
   onSetActiveTool: (tool: EditorTool) => void
-  onToggleResultsMenu: () => void
+  onSetResultsMenuOpen: (isOpen: boolean) => void
   onToggleShowForceResults: () => void
   onToggleShowDeflectionResults: () => void
   onUndo: () => void
@@ -52,188 +118,198 @@ export function EditorToolbar({
   onFitViewport: () => void
   onResetViewport: () => void
 }) {
+  const {
+    refs: resultsMenuRefs,
+    floatingStyles: resultsMenuStyles,
+    context: resultsMenuContext,
+  } = useFloating({
+    open: isResultsMenuOpen,
+    onOpenChange: onSetResultsMenuOpen,
+    placement: 'right-start',
+    whileElementsMounted: autoUpdate,
+    middleware: [
+      offset(10),
+      flip({ fallbackPlacements: ['left-start', 'right-end', 'left-end'] }),
+      shift({ padding: 8 }),
+    ],
+  })
+  const resultsMenuClick = useClick(resultsMenuContext)
+  const resultsMenuDismiss = useDismiss(resultsMenuContext)
+  const resultsMenuRole = useRole(resultsMenuContext, { role: 'menu' })
+  const { getReferenceProps: getResultsReferenceProps, getFloatingProps: getResultsFloatingProps } =
+    useInteractions([resultsMenuClick, resultsMenuDismiss, resultsMenuRole])
+
   return (
     <>
       <div className="editor-overlay editor-side-rail" aria-label="2D editor toolbar">
         <div className="editor-tool-cluster">
           {TOOL_OPTIONS.map((tool) => (
             <div key={tool.value} className="editor-tool-item">
-              <button
-                type="button"
+              <ToolbarButton
                 className={
                   activeTool === tool.value
                     ? 'tool-button rail-button cad-tool-button is-active'
                     : 'tool-button rail-button cad-tool-button'
                 }
                 onClick={() => onSetActiveTool(tool.value)}
-                data-tooltip={tool.title}
                 aria-label={tool.label}
-                title={tool.title}
+                tooltip={tool.title}
               >
                 <ToolIcon tool={tool.value} />
-              </button>
+              </ToolbarButton>
               {tool.value === 'drag' ? <div className="tool-cluster-divider" aria-hidden="true" /> : null}
             </div>
           ))}
         </div>
 
         <div className="editor-tool-cluster" aria-label="Results and history controls">
-          <div className="results-menu-anchor" ref={resultsMenuRef}>
+          <div className="results-menu-anchor">
             <button
+              ref={resultsMenuRefs.setReference}
               type="button"
               className={
                 isResultsMenuOpen || showAnyResults
                   ? 'tool-button rail-button cad-tool-button is-active'
                   : 'tool-button rail-button cad-tool-button'
               }
-              onClick={onToggleResultsMenu}
-              data-tooltip="Results options"
               aria-label="Results options"
-              title="Results options"
               aria-haspopup="menu"
               aria-expanded={isResultsMenuOpen}
+              {...getResultsReferenceProps()}
             >
               <RailActionIcon action={showAnyResults ? 'results-on' : 'results-off'} />
             </button>
 
             {isResultsMenuOpen ? (
-              <div className="results-submenu" role="menu" aria-label="Result layers">
-                <button
-                  type="button"
-                  role="menuitemcheckbox"
-                  aria-checked={showForceResults}
-                  className={
-                    showForceResults
-                      ? 'tool-button results-submenu-item is-active'
-                      : 'tool-button results-submenu-item'
-                  }
-                  onClick={onToggleShowForceResults}
+              <FloatingPortal>
+                <div
+                  ref={resultsMenuRefs.setFloating}
+                  className="results-submenu"
+                  style={resultsMenuStyles}
+                  aria-label="Result layers"
+                  {...getResultsFloatingProps()}
                 >
-                  <span className="results-submenu-check" aria-hidden="true">
-                    {showForceResults ? '✓' : ''}
-                  </span>
-                  Forces
-                </button>
+                  <button
+                    type="button"
+                    role="menuitemcheckbox"
+                    aria-checked={showForceResults}
+                    className={
+                      showForceResults
+                        ? 'tool-button results-submenu-item is-active'
+                        : 'tool-button results-submenu-item'
+                    }
+                    onClick={onToggleShowForceResults}
+                  >
+                    <span className="results-submenu-check" aria-hidden="true">
+                      {showForceResults ? '✓' : ''}
+                    </span>
+                    Forces
+                  </button>
 
-                <button
-                  type="button"
-                  role="menuitemcheckbox"
-                  aria-checked={showDeflectionResults}
-                  className={
-                    showDeflectionResults
-                      ? 'tool-button results-submenu-item is-active'
-                      : 'tool-button results-submenu-item'
-                  }
-                  onClick={onToggleShowDeflectionResults}
-                >
-                  <span className="results-submenu-check" aria-hidden="true">
-                    {showDeflectionResults ? '✓' : ''}
-                  </span>
-                  Deflections
-                </button>
-              </div>
+                  <button
+                    type="button"
+                    role="menuitemcheckbox"
+                    aria-checked={showDeflectionResults}
+                    className={
+                      showDeflectionResults
+                        ? 'tool-button results-submenu-item is-active'
+                        : 'tool-button results-submenu-item'
+                    }
+                    onClick={onToggleShowDeflectionResults}
+                  >
+                    <span className="results-submenu-check" aria-hidden="true">
+                      {showDeflectionResults ? '✓' : ''}
+                    </span>
+                    Deflections
+                  </button>
+                </div>
+              </FloatingPortal>
             ) : null}
           </div>
 
           <div className="tool-cluster-divider" aria-hidden="true" />
 
-          <button
-            type="button"
+          <ToolbarButton
             className="tool-button rail-button cad-tool-button"
             onClick={onUndo}
-            data-tooltip="Undo"
             aria-label="Undo"
-            title="Undo"
             disabled={!canUndo}
+            tooltip="Undo"
           >
             <RailActionIcon action="undo" />
-          </button>
+          </ToolbarButton>
 
-          <button
-            type="button"
+          <ToolbarButton
             className="tool-button rail-button cad-tool-button"
             onClick={onRedo}
-            data-tooltip="Redo"
             aria-label="Redo"
-            title="Redo"
             disabled={!canRedo}
+            tooltip="Redo"
           >
             <RailActionIcon action="redo" />
-          </button>
+          </ToolbarButton>
 
           <div className="tool-cluster-divider" aria-hidden="true" />
 
-          <button
-            type="button"
+          <ToolbarButton
             className="tool-button rail-button cad-tool-button"
             onClick={onSaveModel}
-            data-tooltip="Save model"
             aria-label="Save model"
-            title="Save model"
+            tooltip="Save model"
           >
             <RailActionIcon action="save" />
-          </button>
+          </ToolbarButton>
 
-          <button
-            type="button"
+          <ToolbarButton
             className="tool-button rail-button cad-tool-button"
             onClick={onRequestLoadModel}
-            data-tooltip="Load model"
             aria-label="Load model"
-            title="Load model"
+            tooltip="Load model"
           >
             <RailActionIcon action="load" />
-          </button>
+          </ToolbarButton>
         </div>
       </div>
 
       <div className="editor-overlay editor-zoom-rail" aria-label="Viewport controls">
         <div className="editor-tool-cluster">
-          <button
-            type="button"
+          <ToolbarButton
             className="tool-button rail-button viewport-rail-button"
             onClick={onZoomOut}
-            data-tooltip="Zoom out"
             aria-label="Zoom out"
-            title="Zoom out"
+            tooltip="Zoom out"
           >
             <ViewControlIcon action="zoom-out" />
-          </button>
+          </ToolbarButton>
 
-          <button
-            type="button"
+          <ToolbarButton
             className="tool-button rail-button viewport-rail-button"
             onClick={onZoomIn}
-            data-tooltip="Zoom in"
             aria-label="Zoom in"
-            title="Zoom in"
+            tooltip="Zoom in"
           >
             <ViewControlIcon action="zoom-in" />
-          </button>
+          </ToolbarButton>
 
           <div className="tool-cluster-divider" aria-hidden="true" />
 
-          <button
-            type="button"
+          <ToolbarButton
             className="tool-button rail-button viewport-rail-button"
             onClick={onFitViewport}
-            data-tooltip="Fit model to view"
             aria-label="Fit model to view"
-            title="Fit model to view"
+            tooltip="Fit model to view"
           >
             <ViewControlIcon action="fit" />
-          </button>
+          </ToolbarButton>
 
-          <button
-            type="button"
+          <ToolbarButton
             className="tool-button rail-button viewport-rail-button"
             onClick={onResetViewport}
-            data-tooltip="Reset viewport"
             aria-label="Reset viewport"
-            title="Reset viewport"
+            tooltip="Reset viewport"
           >
             <ViewControlIcon action="reset" />
-          </button>
+          </ToolbarButton>
         </div>
       </div>
     </>
