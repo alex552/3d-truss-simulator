@@ -341,7 +341,34 @@
   background: rgba(255, 255, 255, 0.92);
   backdrop-filter: blur(12px);
   box-shadow: 0 10px 24px rgba(15, 23, 42, 0.14);
-  pointer-events: none;
+  pointer-events: auto;
+}
+
+.editor-structure-status-toggle {
+  right: 18px;
+  bottom: 18px;
+  width: 42px;
+  height: 42px;
+  min-height: 42px;
+  padding: 0;
+  border-radius: 12px;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.14);
+}
+
+.editor-structure-status-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.editor-structure-status-collapse {
+  width: 28px;
+  height: 28px;
+  min-height: 28px;
+  padding: 0;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.7);
 }
 
 .editor-stability-status-stable-determinate,
@@ -739,6 +766,11 @@
     bottom: 14px;
     min-width: 0;
     max-width: min(260px, calc(100% - 28px));
+  }
+
+  .editor-structure-status-toggle {
+    right: 14px;
+    bottom: 14px;
   }
 
   .load-editor-group {

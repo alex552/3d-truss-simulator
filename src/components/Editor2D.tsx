@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ChangeEvent } from 'react'
 import type { MouseEvent } from 'react'
+import { Info, Minus } from 'lucide-react'
 import {
   EDITOR_HEIGHT,
   EDITOR_WIDTH,
@@ -16,6 +17,7 @@ import {
   SupportSymbol,
 } from '../editor/EditorSvgAnnotations'
 import { EditorToolbar } from '../editor/EditorToolbar'
+import { EditorTooltipButton } from '../editor/EditorTooltipButton'
 import { getMajorGridStepMeters, ViewportGrid } from '../editor/ViewportGrid'
 import type { EditorTool, PanSession, Point, SelectedEntity } from '../editor/types'
 import { clampViewportZoom, useEditorViewport } from '../editor/useEditorViewport'
@@ -123,6 +125,7 @@ export function Editor2D({
   const [isSpacePressed, setIsSpacePressed] = useState(false)
   const [isPanning, setIsPanning] = useState(false)
   const [isResultsMenuOpen, setIsResultsMenuOpen] = useState(false)
+  const [isStructureStatusCollapsed, setIsStructureStatusCollapsed] = useState(false)
 
   const canvasShellRef = useRef<HTMLDivElement | null>(null)
   const svgRef = useRef<SVGSVGElement | null>(null)
@@ -589,12 +592,35 @@ export function Editor2D({
           onResetViewport={resetViewport}
         />
 
-        {hasDrawnModel ? (
+        {hasDrawnModel && isStructureStatusCollapsed ? (
+          <EditorTooltipButton
+            className={`tool-button editor-overlay editor-structure-status-toggle editor-stability-status editor-stability-status-${analysis.status}`}
+            onClick={() => setIsStructureStatusCollapsed(false)}
+            aria-label="Show current structure status"
+            tooltip="Show current structure status"
+            tooltipPlacement="left"
+          >
+            <Info className="tool-icon" aria-hidden="true" />
+          </EditorTooltipButton>
+        ) : null}
+
+        {hasDrawnModel && !isStructureStatusCollapsed ? (
           <div
             className={`editor-overlay editor-structure-status editor-stability-status editor-stability-status-${analysis.status}`}
             aria-live="polite"
           >
-            <span className="editor-structure-status-label">Current structure</span>
+            <div className="editor-structure-status-header">
+              <span className="editor-structure-status-label">Current structure</span>
+              <EditorTooltipButton
+                className="tool-button editor-structure-status-collapse"
+                onClick={() => setIsStructureStatusCollapsed(true)}
+                aria-label="Collapse current structure status"
+                tooltip="Collapse"
+                tooltipPlacement="left"
+              >
+                <Minus className="tool-icon" aria-hidden="true" />
+              </EditorTooltipButton>
+            </div>
             <strong className="editor-structure-status-value">
               {formatStabilityValue(analysis.status)}
             </strong>
