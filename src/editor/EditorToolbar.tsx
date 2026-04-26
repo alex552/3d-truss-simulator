@@ -7,13 +7,11 @@ import {
   useClick,
   useDismiss,
   useFloating,
-  useFocus,
-  useHover,
   useInteractions,
   useRole,
 } from '@floating-ui/react'
-import { useState, type ButtonHTMLAttributes, type ReactNode } from 'react'
 import { RailActionIcon, ToolIcon, ViewControlIcon } from './EditorIcons'
+import { EditorTooltipButton } from './EditorTooltipButton'
 import type { EditorTool } from './types'
 
 const TOOL_OPTIONS: { value: EditorTool; label: string; title: string }[] = [
@@ -22,60 +20,6 @@ const TOOL_OPTIONS: { value: EditorTool; label: string; title: string }[] = [
   { value: 'node', label: 'Node tool', title: 'Place node' },
   { value: 'member', label: 'Member tool', title: 'Draw member' },
 ]
-
-function ToolbarButton({
-  tooltip,
-  children,
-  disabled,
-  ...buttonProps
-}: ButtonHTMLAttributes<HTMLButtonElement> & {
-  tooltip: string
-  children: ReactNode
-}) {
-  const [isTooltipOpen, setIsTooltipOpen] = useState(false)
-  const { refs, floatingStyles, context } = useFloating({
-    open: isTooltipOpen,
-    onOpenChange: setIsTooltipOpen,
-    placement: 'right',
-    whileElementsMounted: autoUpdate,
-    middleware: [
-      offset(8),
-      flip({ fallbackPlacements: ['left', 'top', 'bottom'] }),
-      shift({ padding: 8 }),
-    ],
-  })
-  const hover = useHover(context, {
-    enabled: !disabled,
-    delay: { open: 250, close: 0 },
-  })
-  const focus = useFocus(context, { enabled: !disabled })
-  const { getReferenceProps, getFloatingProps } = useInteractions([hover, focus])
-
-  return (
-    <>
-      <button
-        ref={refs.setReference}
-        type="button"
-        disabled={disabled}
-        {...getReferenceProps(buttonProps)}
-      >
-        {children}
-      </button>
-      {isTooltipOpen ? (
-        <FloatingPortal>
-          <div
-            ref={refs.setFloating}
-            className="floating-tooltip"
-            style={floatingStyles}
-            {...getFloatingProps()}
-          >
-            {tooltip}
-          </div>
-        </FloatingPortal>
-      ) : null}
-    </>
-  )
-}
 
 export function EditorToolbar({
   activeTool,
@@ -145,7 +89,7 @@ export function EditorToolbar({
         <div className="editor-tool-cluster">
           {TOOL_OPTIONS.map((tool) => (
             <div key={tool.value} className="editor-tool-item">
-              <ToolbarButton
+              <EditorTooltipButton
                 className={
                   activeTool === tool.value
                     ? 'tool-button rail-button cad-tool-button is-active'
@@ -156,7 +100,7 @@ export function EditorToolbar({
                 tooltip={tool.title}
               >
                 <ToolIcon tool={tool.value} />
-              </ToolbarButton>
+              </EditorTooltipButton>
               {tool.value === 'drag' ? <div className="tool-cluster-divider" aria-hidden="true" /> : null}
             </div>
           ))}
@@ -229,7 +173,7 @@ export function EditorToolbar({
 
           <div className="tool-cluster-divider" aria-hidden="true" />
 
-          <ToolbarButton
+          <EditorTooltipButton
             className="tool-button rail-button cad-tool-button"
             onClick={onUndo}
             aria-label="Undo"
@@ -237,9 +181,9 @@ export function EditorToolbar({
             tooltip="Undo"
           >
             <RailActionIcon action="undo" />
-          </ToolbarButton>
+          </EditorTooltipButton>
 
-          <ToolbarButton
+          <EditorTooltipButton
             className="tool-button rail-button cad-tool-button"
             onClick={onRedo}
             aria-label="Redo"
@@ -247,69 +191,69 @@ export function EditorToolbar({
             tooltip="Redo"
           >
             <RailActionIcon action="redo" />
-          </ToolbarButton>
+          </EditorTooltipButton>
 
           <div className="tool-cluster-divider" aria-hidden="true" />
 
-          <ToolbarButton
+          <EditorTooltipButton
             className="tool-button rail-button cad-tool-button"
             onClick={onSaveModel}
             aria-label="Save model"
             tooltip="Save model"
           >
             <RailActionIcon action="save" />
-          </ToolbarButton>
+          </EditorTooltipButton>
 
-          <ToolbarButton
+          <EditorTooltipButton
             className="tool-button rail-button cad-tool-button"
             onClick={onRequestLoadModel}
             aria-label="Load model"
             tooltip="Load model"
           >
             <RailActionIcon action="load" />
-          </ToolbarButton>
+          </EditorTooltipButton>
         </div>
       </div>
 
       <div className="editor-overlay editor-zoom-rail" aria-label="Viewport controls">
         <div className="editor-tool-cluster">
-          <ToolbarButton
+          <EditorTooltipButton
             className="tool-button rail-button viewport-rail-button"
             onClick={onZoomOut}
             aria-label="Zoom out"
             tooltip="Zoom out"
           >
             <ViewControlIcon action="zoom-out" />
-          </ToolbarButton>
+          </EditorTooltipButton>
 
-          <ToolbarButton
+          <EditorTooltipButton
             className="tool-button rail-button viewport-rail-button"
             onClick={onZoomIn}
             aria-label="Zoom in"
             tooltip="Zoom in"
           >
             <ViewControlIcon action="zoom-in" />
-          </ToolbarButton>
+          </EditorTooltipButton>
 
           <div className="tool-cluster-divider" aria-hidden="true" />
 
-          <ToolbarButton
+          <EditorTooltipButton
             className="tool-button rail-button viewport-rail-button"
             onClick={onFitViewport}
             aria-label="Fit model to view"
             tooltip="Fit model to view"
           >
             <ViewControlIcon action="fit" />
-          </ToolbarButton>
+          </EditorTooltipButton>
 
-          <ToolbarButton
+          <EditorTooltipButton
             className="tool-button rail-button viewport-rail-button"
             onClick={onResetViewport}
             aria-label="Reset viewport"
             tooltip="Reset viewport"
           >
             <ViewControlIcon action="reset" />
-          </ToolbarButton>
+          </EditorTooltipButton>
         </div>
       </div>
     </>

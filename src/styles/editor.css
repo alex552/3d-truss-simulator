@@ -35,6 +35,13 @@
   color: white;
 }
 
+.tool-button.is-active:hover,
+.tool-button.is-active:focus-visible {
+  border-color: #2f6fed;
+  background: #2f6fed;
+  color: #ffffff;
+}
+
 .panel-header {
   padding: 16px 18px 12px;
   border-bottom: 1px solid #edf2f7;
@@ -256,13 +263,6 @@
   border-color: #cbd5e1;
   background: rgba(241, 245, 249, 0.85);
   color: #94a3b8;
-}
-
-.rail-button.is-active:hover,
-.rail-button.is-active:focus-visible {
-  border-color: #2f6fed;
-  background: #2f6fed;
-  color: #ffffff;
 }
 
 .tool-icon {

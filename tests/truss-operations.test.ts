@@ -42,7 +42,7 @@ describe('truss model operations', () => {
     expect(nextSnapshot.members.map((member) => member.id)).toEqual(['member-3'])
   })
 
-  it('clears horizontal loads when magnitude is zero', () => {
+  it('keeps horizontal load direction when magnitude is zero', () => {
     const nodes = [
       {
         ...createNode('node-1', 0, 0),
@@ -50,6 +50,9 @@ describe('truss model operations', () => {
       },
     ]
 
-    expect(setNodeHorizontalLoad(nodes, 'node-1', 0, 'left')[0].horizontalLoad).toBeUndefined()
+    expect(setNodeHorizontalLoad(nodes, 'node-1', 0, 'left')[0].horizontalLoad).toEqual({
+      magnitudeKn: 0,
+      direction: 'left',
+    })
   })
 })

@@ -69,12 +69,14 @@ export function SupportSymbol({ node }: { node: Node2D }) {
 
 export function NodeLoads({ node }: { node: Node2D }) {
   const loadElements: ReactElement[] = []
+  const hasHorizontalLoad = Boolean(node.horizontalLoad && node.horizontalLoad.magnitudeKn > 0)
+  const hasVerticalLoad = Boolean(node.verticalLoad && node.verticalLoad.magnitudeKn > 0)
 
-  if (node.horizontalLoad) {
+  if (node.horizontalLoad && hasHorizontalLoad) {
     const arrowLength = clampArrowLength(node.horizontalLoad.magnitudeKn)
     const direction = node.horizontalLoad.direction === 'left' ? -1 : 1
     const endX = node.x + direction * arrowLength
-    const offsetY = node.verticalLoad ? node.y - 34 : node.y - 26
+    const offsetY = hasVerticalLoad ? node.y - 34 : node.y - 26
 
     loadElements.push(
       <g key="horizontal-load" className="node-load" pointerEvents="none">
@@ -99,11 +101,11 @@ export function NodeLoads({ node }: { node: Node2D }) {
     )
   }
 
-  if (node.verticalLoad) {
+  if (node.verticalLoad && hasVerticalLoad) {
     const arrowLength = clampArrowLength(node.verticalLoad.magnitudeKn)
     const direction = node.verticalLoad.direction === 'up' ? -1 : 1
     const endY = node.y + direction * arrowLength
-    const offsetX = node.horizontalLoad ? node.x + 34 : node.x + 26
+    const offsetX = hasHorizontalLoad ? node.x + 34 : node.x + 26
 
     loadElements.push(
       <g key="vertical-load" className="node-load" pointerEvents="none">

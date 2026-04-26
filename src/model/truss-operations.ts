@@ -93,17 +93,16 @@ export function setNodeHorizontalLoad(
   magnitudeKn: number,
   direction: HorizontalLoadDirection,
 ): Node2D[] {
+  const normalizedMagnitudeKn = Math.max(0, magnitudeKn)
+
   return nodes.map((node) =>
     node.id === nodeId
       ? {
           ...node,
-          horizontalLoad:
-            magnitudeKn > 0
-              ? {
-                  magnitudeKn,
-                  direction,
-                }
-              : undefined,
+          horizontalLoad: {
+            magnitudeKn: normalizedMagnitudeKn,
+            direction,
+          },
         }
       : node,
   )
@@ -115,17 +114,16 @@ export function setNodeVerticalLoad(
   magnitudeKn: number,
   direction: VerticalLoadDirection,
 ): Node2D[] {
+  const normalizedMagnitudeKn = Math.max(0, magnitudeKn)
+
   return nodes.map((node) =>
     node.id === nodeId
       ? {
           ...node,
-          verticalLoad:
-            magnitudeKn > 0
-              ? {
-                  magnitudeKn,
-                  direction,
-                }
-              : undefined,
+          verticalLoad: {
+            magnitudeKn: normalizedMagnitudeKn,
+            direction,
+          },
         }
       : node,
   )

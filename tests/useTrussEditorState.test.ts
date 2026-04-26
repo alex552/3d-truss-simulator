@@ -75,7 +75,7 @@ describe('truss editor reducer', () => {
     expect(redoneState.undoStack).toHaveLength(1)
   })
 
-  it('clears selected node loads when magnitude is zero', () => {
+  it('keeps selected node load direction when magnitude is zero', () => {
     const state = {
       ...initialTrussEditorState,
       nodes: [
@@ -95,7 +95,10 @@ describe('truss editor reducer', () => {
       direction: 'left',
     })
 
-    expect(nextState.nodes[0].horizontalLoad).toBeUndefined()
+    expect(nextState.nodes[0].horizontalLoad).toEqual({
+      magnitudeKn: 0,
+      direction: 'left',
+    })
   })
 })
 

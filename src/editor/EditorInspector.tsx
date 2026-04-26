@@ -5,6 +5,7 @@ import type {
   SupportType,
   VerticalLoadDirection,
 } from '../types'
+import { EditorTooltipButton } from './EditorTooltipButton'
 
 const SUPPORT_OPTIONS: { value: SupportType | undefined; label: string; title: string }[] = [
   { value: undefined, label: 'No support', title: 'None' },
@@ -60,9 +61,8 @@ export function EditorInspector({
             <span className="inspector-label">Support</span>
             <div className="support-chip-group">
               {SUPPORT_OPTIONS.map((option) => (
-                <button
+                <EditorTooltipButton
                   key={option.title}
-                  type="button"
                   className={
                     selectedNodeSupport === option.value ||
                     (selectedNodeSupport === undefined && option.value === undefined)
@@ -71,10 +71,11 @@ export function EditorInspector({
                   }
                   onClick={() => onSetSelectedNodeSupport(option.value)}
                   aria-label={option.label}
-                  title={option.title}
+                  tooltip={option.title}
+                  tooltipPlacement="bottom"
                 >
                   <SupportChipIcon support={option.value} />
-                </button>
+                </EditorTooltipButton>
               ))}
             </div>
           </div>
@@ -84,9 +85,8 @@ export function EditorInspector({
               <span className="load-label">H</span>
               <div className="direction-toggle">
                 {horizontalDirectionOptions.map((direction) => (
-                  <button
+                  <EditorTooltipButton
                     key={direction}
-                    type="button"
                     className={
                       (selectedHorizontalLoad?.direction ?? 'right') === direction
                         ? 'tool-button direction-button is-active'
@@ -99,10 +99,11 @@ export function EditorInspector({
                       )
                     }
                     aria-label={`Horizontal load ${direction}`}
-                    title={`Horizontal ${direction}`}
+                    tooltip={`Horizontal ${direction}`}
+                    tooltipPlacement="bottom"
                   >
                     {direction === 'left' ? '←' : '→'}
-                  </button>
+                  </EditorTooltipButton>
                 ))}
               </div>
               <input
@@ -120,9 +121,8 @@ export function EditorInspector({
               <span className="load-label">V</span>
               <div className="direction-toggle">
                 {verticalDirectionOptions.map((direction) => (
-                  <button
+                  <EditorTooltipButton
                     key={direction}
-                    type="button"
                     className={
                       (selectedVerticalLoad?.direction ?? 'down') === direction
                         ? 'tool-button direction-button is-active'
@@ -135,10 +135,11 @@ export function EditorInspector({
                       )
                     }
                     aria-label={`Vertical load ${direction}`}
-                    title={`Vertical ${direction}`}
+                    tooltip={`Vertical ${direction}`}
+                    tooltipPlacement="bottom"
                   >
                     {direction === 'up' ? '↑' : '↓'}
-                  </button>
+                  </EditorTooltipButton>
                 ))}
               </div>
               <input

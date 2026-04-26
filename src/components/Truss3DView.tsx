@@ -127,9 +127,12 @@ function LoadMarker({
   horizontalLoad?: HorizontalLoad
   verticalLoad?: VerticalLoad
 }) {
+  const hasHorizontalLoad = Boolean(horizontalLoad && horizontalLoad.magnitudeKn > 0)
+  const hasVerticalLoad = Boolean(verticalLoad && verticalLoad.magnitudeKn > 0)
+
   return (
     <>
-      {horizontalLoad ? (
+      {horizontalLoad && hasHorizontalLoad ? (
         <DirectionalLoadArrow
           start={[position[0], 0.28, position[2] + 0.1]}
           axis={horizontalLoad.direction === 'left' ? 'negative-x' : 'positive-x'}
@@ -137,7 +140,7 @@ function LoadMarker({
           labelOffset={[0, 0.12, 0.22]}
         />
       ) : null}
-      {verticalLoad ? (
+      {verticalLoad && hasVerticalLoad ? (
         <DirectionalLoadArrow
           start={[position[0] + 0.22, 0.28, position[2]]}
           axis={verticalLoad.direction === 'up' ? 'positive-z' : 'negative-z'}
