@@ -2,8 +2,8 @@ import { useRef, useState } from 'react'
 import { snapToGrid } from '../constants'
 import type { Point, Viewport } from './types'
 
-const MIN_ZOOM = 0.35
-const MAX_ZOOM = 3.5
+const MIN_ZOOM = 0.08
+const MAX_ZOOM = 12
 
 export function useEditorViewport() {
   const [viewport, setViewportState] = useState<Viewport>({

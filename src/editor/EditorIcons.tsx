@@ -2,12 +2,12 @@ import {
   CirclePlus,
   Eye,
   EyeOff,
+  Home,
   Maximize,
   MousePointer2,
   Move,
   Redo2,
   Save,
-  Scan,
   Trash2,
   Upload,
   Undo2,
@@ -79,8 +79,8 @@ export function ViewControlIcon({
   }
 
   if (action === 'fit') {
-    return <Scan className="tool-icon" aria-hidden="true" />
+    return <Maximize className="tool-icon" aria-hidden="true" />
   }
 
-  return <Maximize className="tool-icon" aria-hidden="true" />
+  return <Home className="tool-icon" aria-hidden="true" />
 }

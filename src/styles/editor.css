@@ -140,6 +140,25 @@
   pointer-events: none;
 }
 
+.editor-viewport-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px;
+  border: 1px solid rgba(148, 163, 184, 0.5);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.12);
+  pointer-events: auto;
+}
+
+.editor-viewport-controls .tool-cluster-divider {
+  width: 1px;
+  height: 22px;
+  margin: 0 3px;
+}
+
 .editor-tool-cluster {
   display: flex;
   flex-direction: column;
@@ -246,6 +265,26 @@
   background: rgba(255, 255, 255, 0.94);
 }
 
+.viewport-control-button {
+  width: 34px;
+  height: 34px;
+  min-height: 34px;
+  border-radius: 7px;
+  background: transparent;
+}
+
+.viewport-scale-readout {
+  min-width: 58px;
+  padding: 0 8px;
+  color: #334155;
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 34px;
+  text-align: center;
+  user-select: none;
+}
+
 .cad-tool-button {
   color: #334155;
 }
@@ -327,26 +366,6 @@
   background: rgba(255, 255, 255, 0.9);
   backdrop-filter: blur(16px);
   box-shadow: 0 16px 32px rgba(15, 23, 42, 0.14);
-}
-
-.editor-axis-overlay {
-  left: 28px;
-  bottom: 24px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  pointer-events: none;
-}
-
-.editor-axis-diagram {
-  width: 124px;
-  height: 56px;
-}
-
-.editor-axis-hint {
-  color: #475569;
-  font-size: 12px;
-  font-weight: 600;
 }
 
 .inspector-header {
@@ -501,40 +520,6 @@
   stroke: #2f6fed;
 }
 
-.axis-line {
-  stroke-width: 2.5;
-  stroke-linecap: round;
-}
-
-.axis-line-x {
-  stroke: #e03131;
-}
-
-.axis-line-z {
-  stroke: #1971c2;
-}
-
-.axis-arrow-x {
-  fill: #e03131;
-}
-
-.axis-arrow-z {
-  fill: #1971c2;
-}
-
-.axis-label {
-  font-size: 16px;
-  font-weight: 700;
-}
-
-.axis-label-x {
-  fill: #e03131;
-}
-
-.axis-label-z {
-  fill: #1971c2;
-}
-
 .member-length {
   fill: #334155;
   font-size: 11px;
@@ -665,6 +650,22 @@
     bottom: 14px;
   }
 
+  .editor-viewport-controls {
+    gap: 3px;
+    padding: 4px;
+  }
+
+  .viewport-control-button {
+    width: 32px;
+    height: 32px;
+    min-height: 32px;
+  }
+
+  .viewport-scale-readout {
+    min-width: 54px;
+    line-height: 32px;
+  }
+
   .editor-tool-cluster {
     padding: 7px;
   }
@@ -680,11 +681,6 @@
     right: 18px;
     width: min(280px, calc(100% - 98px));
     padding: 12px;
-  }
-
-  .editor-axis-overlay {
-    left: 20px;
-    bottom: 18px;
   }
 
   .load-editor-group {

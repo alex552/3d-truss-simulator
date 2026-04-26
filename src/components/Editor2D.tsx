@@ -16,7 +16,7 @@ import {
   SupportSymbol,
 } from '../editor/EditorSvgAnnotations'
 import { EditorToolbar } from '../editor/EditorToolbar'
-import { ViewportGrid } from '../editor/ViewportGrid'
+import { getMajorGridStepMeters, ViewportGrid } from '../editor/ViewportGrid'
 import type { EditorTool, PanSession, Point, SelectedEntity } from '../editor/types'
 import { clampViewportZoom, useEditorViewport } from '../editor/useEditorViewport'
 import { normalizeSupportType, type RuntimeSupportType } from '../lib/truss-model'
@@ -69,7 +69,6 @@ type Editor2DProps = {
 }
 
 const NODE_RADIUS = 8
-const AXIS_MARGIN = 28
 const ZOOM_STEP = 1.2
 const AUTO_PAN_EDGE_PX = 36
 const AUTO_PAN_SPEED_PX = 16
@@ -127,6 +126,8 @@ export function Editor2D({
 
   const canvasShellRef = useRef<HTMLDivElement | null>(null)
   const svgRef = useRef<SVGSVGElement | null>(null)
+  const canvasSizeRef = useRef(canvasSize)
+  const lastCursorScreenPointRef = useRef<Point | null>(null)
   const dragNodeIdRef = useRef<string | null>(null)
   const dragMovedRef = useRef(false)
   const suppressClickRef = useRef(false)
@@ -189,14 +190,36 @@ export function Editor2D({
     element: SVGSVGElement,
   ): Point => {
     const rect = element.getBoundingClientRect()
-    const scaleX = canvasSize.width / rect.width
-    const scaleY = canvasSize.height / rect.height
+    const currentCanvasSize = canvasSizeRef.current
+    const scaleX = currentCanvasSize.width / rect.width
+    const scaleY = currentCanvasSize.height / rect.height
 
     return {
       x: (clientX - rect.left) * scaleX,
       y: (clientY - rect.top) * scaleY,
     }
   }
+
+  const setLastCursorScreenPoint = (screenPoint: Point) => {
+    const currentCanvasSize = canvasSizeRef.current
+
+    if (
+      screenPoint.x < 0 ||
+      screenPoint.y < 0 ||
+      screenPoint.x > currentCanvasSize.width ||
+      screenPoint.y > currentCanvasSize.height
+    ) {
+      return
+    }
+
+    lastCursorScreenPointRef.current = screenPoint
+  }
+
+  const getZoomAnchorScreenPoint = () =>
+    lastCursorScreenPointRef.current ?? {
+      x: canvasSizeRef.current.width / 2,
+      y: canvasSizeRef.current.height / 2,
+    }
 
   const getScreenPoint = (event: MouseEvent<SVGSVGElement>): Point =>
     getScreenPointFromClient(event.clientX, event.clientY, event.currentTarget)
@@ -245,6 +268,7 @@ export function Editor2D({
           Math.hypot(previewPoint.x - memberStartNode.x, previewPoint.y - memberStartNode.y),
         )
       : null
+  const majorGridStepMeters = getMajorGridStepMeters(viewport.zoom)
 
   const previewMidpoint =
     memberStartNode && previewPoint
@@ -285,6 +309,10 @@ export function Editor2D({
   )
 
   useEffect(() => {
+    canvasSizeRef.current = canvasSize
+  }, [canvasSize])
+
+  useEffect(() => {
     const canvasShell = canvasShellRef.current
 
     if (!canvasShell) {
@@ -294,11 +322,14 @@ export function Editor2D({
     const updateCanvasSize = () => {
       const nextWidth = Math.max(1, Math.round(canvasShell.clientWidth))
       const nextHeight = Math.max(1, Math.round(canvasShell.clientHeight))
+      const nextSize = { width: nextWidth, height: nextHeight }
+
+      canvasSizeRef.current = nextSize
 
       setCanvasSize((currentSize) =>
         currentSize.width === nextWidth && currentSize.height === nextHeight
           ? currentSize
-          : { width: nextWidth, height: nextHeight },
+          : nextSize,
       )
     }
 
@@ -359,6 +390,8 @@ export function Editor2D({
   }
 
   const handleCanvasMouseDown = (event: MouseEvent<SVGSVGElement>) => {
+    setLastCursorScreenPoint(getScreenPoint(event))
+
     const isPanGesture =
       event.button === 1 ||
       (spacePressedRef.current && event.button === 0) ||
@@ -382,6 +415,8 @@ export function Editor2D({
   }
 
   const handleCanvasClick = (event: MouseEvent<SVGSVGElement>) => {
+    setLastCursorScreenPoint(getScreenPoint(event))
+
     if (shouldSuppressClick()) {
       return
     }
@@ -398,6 +433,7 @@ export function Editor2D({
 
   const handleMouseMove = (event: MouseEvent<SVGSVGElement>) => {
     const screenPoint = getScreenPoint(event)
+    setLastCursorScreenPoint(screenPoint)
 
     if (isPanningRef.current && panSessionRef.current) {
       const currentZoom = viewportRef.current.zoom
@@ -458,10 +494,10 @@ export function Editor2D({
       event.preventDefault()
 
       const zoomFactor = Math.exp(-event.deltaY * 0.0015)
-      zoomAroundScreenPoint(
-        viewportRef.current.zoom * zoomFactor,
-        getScreenPointFromClient(event.clientX, event.clientY, svgElement),
-      )
+      const screenPoint = getScreenPointFromClient(event.clientX, event.clientY, svgElement)
+
+      setLastCursorScreenPoint(screenPoint)
+      zoomAroundScreenPoint(viewportRef.current.zoom * zoomFactor, screenPoint)
     }
 
     svgElement.addEventListener('wheel', handleWheel, { passive: false })
@@ -541,17 +577,12 @@ export function Editor2D({
           onSaveModel={onSaveModel}
           onRequestLoadModel={() => loadInputRef.current?.click()}
           onClearModel={onClearModel}
+          viewportScaleLabel={formatGridStepLabel(majorGridStepMeters)}
           onZoomOut={() =>
-            zoomAroundScreenPoint(viewport.zoom / ZOOM_STEP, {
-              x: canvasSize.width / 2,
-              y: canvasSize.height / 2,
-            })
+            zoomAroundScreenPoint(viewportRef.current.zoom / ZOOM_STEP, getZoomAnchorScreenPoint())
           }
           onZoomIn={() =>
-            zoomAroundScreenPoint(viewport.zoom * ZOOM_STEP, {
-              x: canvasSize.width / 2,
-              y: canvasSize.height / 2,
-            })
+            zoomAroundScreenPoint(viewportRef.current.zoom * ZOOM_STEP, getZoomAnchorScreenPoint())
           }
           onFitViewport={fitViewportToModel}
           onResetViewport={resetViewport}
@@ -571,22 +602,6 @@ export function Editor2D({
           onVerticalMagnitudeChange={verticalMagnitudeChange}
         />
 
-        <div className="editor-overlay editor-axis-overlay" aria-hidden="true">
-          <svg viewBox="0 0 124 56" className="editor-axis-diagram">
-            <line x1="18" y1="38" x2="88" y2="38" className="axis-line axis-line-x" />
-            <polygon points="96,38 84,33 84,43" className="axis-arrow-x" />
-            <line x1="18" y1="38" x2="18" y2="10" className="axis-line axis-line-z" />
-            <polygon points="18,2 13,14 23,14" className="axis-arrow-z" />
-            <text x="102" y="42" className="axis-label axis-label-x">
-              X
-            </text>
-            <text x="12" y="11" className="axis-label axis-label-z">
-              Z
-            </text>
-          </svg>
-          <span className="editor-axis-hint">Y axis points out of the screen. Snap: 0.1 m</span>
-        </div>
-
         <svg
           ref={svgRef}
           className={`editor-surface${
@@ -601,29 +616,6 @@ export function Editor2D({
           role="img"
           aria-label="2D truss editor"
         >
-            <defs>
-              <marker
-                id="axis-arrow-x"
-                markerWidth="8"
-                markerHeight="8"
-                refX="6"
-                refY="4"
-                orient="auto"
-              >
-                <path d="M 0 0 L 8 4 L 0 8 z" className="axis-arrow-x" />
-              </marker>
-              <marker
-                id="axis-arrow-z"
-                markerWidth="8"
-                markerHeight="8"
-                refX="6"
-                refY="4"
-                orient="auto"
-              >
-                <path d="M 0 0 L 8 4 L 0 8 z" className="axis-arrow-z" />
-              </marker>
-            </defs>
-
             <rect
               x="0"
               y="0"
@@ -782,6 +774,10 @@ export function Editor2D({
       </div>
     </div>
   )
+}
+
+function formatGridStepLabel(valueMeters: number) {
+  return `${Number(valueMeters.toFixed(2))} m`
 }
 
 function getAutoPanDelta(screenPoint: Point, zoom: number) {

@@ -1,5 +1,8 @@
 import type { ReactElement } from 'react'
-import { GRID_SIZE_PX } from '../constants'
+import { GRID_SIZE_PX, METERS_PER_GRID } from '../constants'
+
+const MIN_MAJOR_GRID_SCREEN_SIZE_PX = 56
+const MAJOR_GRID_MULTIPLIERS = [1, 2, 5]
 
 export function ViewportGrid({
   width,
@@ -24,12 +27,7 @@ export function ViewportGrid({
 }) {
   const gridLines: ReactElement[] = []
   const showMinorLines = GRID_SIZE_PX * zoom >= 10
-  let majorMultiple = 5
-
-  while (GRID_SIZE_PX * majorMultiple * zoom < 56) {
-    majorMultiple *= 2
-  }
-
+  const majorMultiple = getMajorGridMultiple(zoom)
   const majorStep = GRID_SIZE_PX * majorMultiple
 
   if (showMinorLines) {
@@ -111,4 +109,28 @@ export function ViewportGrid({
   }
 
   return <g pointerEvents="none">{gridLines}</g>
+}
+
+export function getMajorGridStepMeters(zoom: number) {
+  return getMajorGridMultiple(zoom) * METERS_PER_GRID
+}
+
+function getMajorGridMultiple(zoom: number) {
+  if (zoom <= 0) {
+    return 5
+  }
+
+  let decade = 1
+
+  while (true) {
+    for (const multiplier of MAJOR_GRID_MULTIPLIERS) {
+      const majorMultiple = multiplier * decade
+
+      if (GRID_SIZE_PX * majorMultiple * zoom >= MIN_MAJOR_GRID_SCREEN_SIZE_PX) {
+        return majorMultiple
+      }
+    }
+
+    decade *= 10
+  }
 }

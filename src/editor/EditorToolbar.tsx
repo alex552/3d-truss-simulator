@@ -39,6 +39,7 @@ export function EditorToolbar({
   onSaveModel,
   onRequestLoadModel,
   onClearModel,
+  viewportScaleLabel,
   onZoomOut,
   onZoomIn,
   onFitViewport,
@@ -61,6 +62,7 @@ export function EditorToolbar({
   onSaveModel: () => void
   onRequestLoadModel: () => void
   onClearModel: () => void
+  viewportScaleLabel: string
   onZoomOut: () => void
   onZoomIn: () => void
   onFitViewport: () => void
@@ -232,9 +234,9 @@ export function EditorToolbar({
       </div>
 
       <div className="editor-overlay editor-zoom-rail" aria-label="Viewport controls">
-        <div className="editor-tool-cluster">
+        <div className="editor-viewport-controls">
           <EditorTooltipButton
-            className="tool-button rail-button viewport-rail-button"
+            className="tool-button rail-button viewport-control-button"
             onClick={onZoomOut}
             aria-label="Zoom out"
             tooltip="Zoom out"
@@ -242,8 +244,15 @@ export function EditorToolbar({
             <ViewControlIcon action="zoom-out" />
           </EditorTooltipButton>
 
+          <div
+            className="viewport-scale-readout"
+            aria-label={`Major grid square ${viewportScaleLabel}`}
+          >
+            {viewportScaleLabel}
+          </div>
+
           <EditorTooltipButton
-            className="tool-button rail-button viewport-rail-button"
+            className="tool-button rail-button viewport-control-button"
             onClick={onZoomIn}
             aria-label="Zoom in"
             tooltip="Zoom in"
@@ -254,7 +263,7 @@ export function EditorToolbar({
           <div className="tool-cluster-divider" aria-hidden="true" />
 
           <EditorTooltipButton
-            className="tool-button rail-button viewport-rail-button"
+            className="tool-button rail-button viewport-control-button"
             onClick={onFitViewport}
             aria-label="Fit model to view"
             tooltip="Fit model to view"
@@ -263,7 +272,7 @@ export function EditorToolbar({
           </EditorTooltipButton>
 
           <EditorTooltipButton
-            className="tool-button rail-button viewport-rail-button"
+            className="tool-button rail-button viewport-control-button"
             onClick={onResetViewport}
             aria-label="Reset viewport"
             tooltip="Reset viewport"
