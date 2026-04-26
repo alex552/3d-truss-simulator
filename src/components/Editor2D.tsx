@@ -39,8 +39,9 @@ type Editor2DProps = {
   activeTool: EditorTool
   memberStartNodeId: string | null
   selectedEntity: SelectedEntity
+  selectedNodeIds: string[]
   onCanvasClick: (x: number, y: number) => void
-  onNodeClick: (nodeId: string) => void
+  onNodeClick: (nodeId: string, additive?: boolean) => void
   onMemberClick: (memberId: string) => void
   onMoveNode: (nodeId: string, x: number, y: number) => void
   onSetActiveTool: (tool: EditorTool) => void
@@ -83,6 +84,7 @@ export function Editor2D({
   activeTool,
   memberStartNodeId,
   selectedEntity,
+  selectedNodeIds,
   onCanvasClick,
   onNodeClick,
   onMemberClick,
@@ -144,12 +146,19 @@ export function Editor2D({
     [nodes, memberStartNodeId],
   )
 
+  const selectedNodeIdSet = useMemo(() => new Set(selectedNodeIds), [selectedNodeIds])
+
+  const selectedNodes = useMemo(
+    () => nodes.filter((node) => selectedNodeIdSet.has(node.id)),
+    [nodes, selectedNodeIdSet],
+  )
+
   const selectedNode = useMemo(
     () =>
       selectedEntity?.type === 'node'
         ? nodes.find((node) => node.id === selectedEntity.id) ?? null
-        : null,
-    [nodes, selectedEntity],
+        : selectedNodes[0] ?? null,
+    [nodes, selectedEntity, selectedNodes],
   )
 
   const selectedMember = useMemo(
@@ -177,11 +186,27 @@ export function Editor2D({
 
   const nodeById = useMemo(() => new Map(nodes.map((node) => [node.id, node])), [nodes])
 
-  const selectedNodeSupport = normalizeSupportType(
-    selectedNode?.support as RuntimeSupportType | undefined,
+  const selectedNodeSupportState = useMemo(
+    () => getCommonSelectedNodeSupport(selectedNodes),
+    [selectedNodes],
   )
-  const selectedHorizontalLoad = selectedNode?.horizontalLoad
-  const selectedVerticalLoad = selectedNode?.verticalLoad
+  const selectedHorizontalLoadState = useMemo(
+    () => getCommonSelectedHorizontalLoad(selectedNodes),
+    [selectedNodes],
+  )
+  const selectedVerticalLoadState = useMemo(
+    () => getCommonSelectedVerticalLoad(selectedNodes),
+    [selectedNodes],
+  )
+  const selectedNodeSupport = selectedNodeSupportState.mixed
+    ? normalizeSupportType(selectedNode?.support as RuntimeSupportType | undefined)
+    : selectedNodeSupportState.value
+  const selectedHorizontalLoad = selectedHorizontalLoadState.mixed
+    ? selectedNode?.horizontalLoad
+    : selectedHorizontalLoadState.value
+  const selectedVerticalLoad = selectedVerticalLoadState.mixed
+    ? selectedNode?.verticalLoad
+    : selectedVerticalLoadState.value
 
   const isStableAnalysis =
     analysis.status === 'stable-determinate' || analysis.status === 'stable-indeterminate'
@@ -359,7 +384,9 @@ export function Editor2D({
   }
 
   const getNodeClassName = (nodeId: string) => {
-    const isSelected = selectedEntity?.type === 'node' && selectedEntity.id === nodeId
+    const isSelected =
+      selectedNodeIdSet.has(nodeId) ||
+      (selectedEntity?.type === 'node' && selectedEntity.id === nodeId)
     const isMemberStart = memberStartNodeId === nodeId
 
     if (isSelected || isMemberStart) {
@@ -632,10 +659,14 @@ export function Editor2D({
 
         <EditorInspector
           selectedNode={selectedNode}
+          selectedNodeCount={selectedNodes.length}
           selectedMember={selectedMember}
           selectedNodeSupport={selectedNodeSupport}
+          selectedNodeSupportMixed={selectedNodeSupportState.mixed}
           selectedHorizontalLoad={selectedHorizontalLoad}
+          selectedHorizontalLoadMixed={selectedHorizontalLoadState.mixed}
           selectedVerticalLoad={selectedVerticalLoad}
+          selectedVerticalLoadMixed={selectedVerticalLoadState.mixed}
           onSetSelectedNodeSupport={onSetSelectedNodeSupport}
           onSetSelectedMemberAxialStiffness={onSetSelectedMemberAxialStiffness}
           onSetSelectedNodeHorizontalLoad={onSetSelectedNodeHorizontalLoad}
@@ -785,7 +816,13 @@ export function Editor2D({
 
                       event.preventDefault()
                       event.stopPropagation()
-                      onNodeClick(node.id)
+                      onNodeClick(node.id, event.shiftKey)
+
+                      if (event.shiftKey) {
+                        suppressClickRef.current = true
+                        return
+                      }
+
                       dragNodeIdRef.current = node.id
                       dragMovedRef.current = false
                     }}
@@ -802,7 +839,7 @@ export function Editor2D({
                         return
                       }
 
-                      onNodeClick(node.id)
+                      onNodeClick(node.id, event.shiftKey)
                     }}
                     onContextMenu={(event) => {
                       event.preventDefault()
@@ -821,6 +858,64 @@ export function Editor2D({
 
 function formatGridStepLabel(valueMeters: number) {
   return `${Number(valueMeters.toFixed(2))} m`
+}
+
+function getCommonSelectedNodeSupport(nodes: Node2D[]) {
+  if (nodes.length === 0) {
+    return { value: undefined, mixed: false }
+  }
+
+  const [firstNode] = nodes
+  const firstSupport = normalizeSupportType(firstNode.support as RuntimeSupportType | undefined)
+  const mixed = nodes.some(
+    (node) => normalizeSupportType(node.support as RuntimeSupportType | undefined) !== firstSupport,
+  )
+
+  return {
+    value: firstSupport,
+    mixed,
+  }
+}
+
+function getCommonSelectedHorizontalLoad(nodes: Node2D[]) {
+  if (nodes.length === 0) {
+    return { value: undefined, mixed: false }
+  }
+
+  const [firstNode] = nodes
+  const firstLoad = firstNode.horizontalLoad
+  const mixed = nodes.some((node) => !areHorizontalLoadsEqual(node.horizontalLoad, firstLoad))
+
+  return {
+    value: firstLoad,
+    mixed,
+  }
+}
+
+function getCommonSelectedVerticalLoad(nodes: Node2D[]) {
+  if (nodes.length === 0) {
+    return { value: undefined, mixed: false }
+  }
+
+  const [firstNode] = nodes
+  const firstLoad = firstNode.verticalLoad
+  const mixed = nodes.some((node) => !areVerticalLoadsEqual(node.verticalLoad, firstLoad))
+
+  return {
+    value: firstLoad,
+    mixed,
+  }
+}
+
+function areHorizontalLoadsEqual(
+  loadA: Node2D['horizontalLoad'],
+  loadB: Node2D['horizontalLoad'],
+) {
+  return loadA?.magnitudeKn === loadB?.magnitudeKn && loadA?.direction === loadB?.direction
+}
+
+function areVerticalLoadsEqual(loadA: Node2D['verticalLoad'], loadB: Node2D['verticalLoad']) {
+  return loadA?.magnitudeKn === loadB?.magnitudeKn && loadA?.direction === loadB?.direction
 }
 
 function formatStabilityValue(status: TrussAnalysisResult['status']) {

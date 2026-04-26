@@ -45,10 +45,19 @@ export function deleteNode(
   snapshot: ModelSnapshot,
   nodeId: string,
 ): ModelSnapshot {
+  return deleteNodes(snapshot, [nodeId])
+}
+
+export function deleteNodes(
+  snapshot: ModelSnapshot,
+  nodeIds: string[],
+): ModelSnapshot {
+  const nodeIdSet = new Set(nodeIds)
+
   return {
-    nodes: snapshot.nodes.filter((node) => node.id !== nodeId),
+    nodes: snapshot.nodes.filter((node) => !nodeIdSet.has(node.id)),
     members: snapshot.members.filter(
-      (member) => member.nodeAId !== nodeId && member.nodeBId !== nodeId,
+      (member) => !nodeIdSet.has(member.nodeAId) && !nodeIdSet.has(member.nodeBId),
     ),
   }
 }
@@ -62,8 +71,18 @@ export function setNodeSupport(
   nodeId: string,
   support: SupportType | undefined,
 ): Node2D[] {
+  return setNodesSupport(nodes, [nodeId], support)
+}
+
+export function setNodesSupport(
+  nodes: Node2D[],
+  nodeIds: string[],
+  support: SupportType | undefined,
+): Node2D[] {
+  const nodeIdSet = new Set(nodeIds)
+
   return nodes.map((node) =>
-    node.id === nodeId
+    nodeIdSet.has(node.id)
       ? {
           ...node,
           support,
@@ -93,10 +112,20 @@ export function setNodeHorizontalLoad(
   magnitudeKn: number,
   direction: HorizontalLoadDirection,
 ): Node2D[] {
+  return setNodesHorizontalLoad(nodes, [nodeId], magnitudeKn, direction)
+}
+
+export function setNodesHorizontalLoad(
+  nodes: Node2D[],
+  nodeIds: string[],
+  magnitudeKn: number,
+  direction: HorizontalLoadDirection,
+): Node2D[] {
   const normalizedMagnitudeKn = Math.max(0, magnitudeKn)
+  const nodeIdSet = new Set(nodeIds)
 
   return nodes.map((node) =>
-    node.id === nodeId
+    nodeIdSet.has(node.id)
       ? {
           ...node,
           horizontalLoad: {
@@ -114,10 +143,20 @@ export function setNodeVerticalLoad(
   magnitudeKn: number,
   direction: VerticalLoadDirection,
 ): Node2D[] {
+  return setNodesVerticalLoad(nodes, [nodeId], magnitudeKn, direction)
+}
+
+export function setNodesVerticalLoad(
+  nodes: Node2D[],
+  nodeIds: string[],
+  magnitudeKn: number,
+  direction: VerticalLoadDirection,
+): Node2D[] {
   const normalizedMagnitudeKn = Math.max(0, magnitudeKn)
+  const nodeIdSet = new Set(nodeIds)
 
   return nodes.map((node) =>
-    node.id === nodeId
+    nodeIdSet.has(node.id)
       ? {
           ...node,
           verticalLoad: {

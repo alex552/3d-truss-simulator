@@ -19,10 +19,14 @@ const verticalDirectionOptions: VerticalLoadDirection[] = ['up', 'down']
 
 export function EditorInspector({
   selectedNode,
+  selectedNodeCount,
   selectedMember,
   selectedNodeSupport,
+  selectedNodeSupportMixed,
   selectedHorizontalLoad,
+  selectedHorizontalLoadMixed,
   selectedVerticalLoad,
+  selectedVerticalLoadMixed,
   onSetSelectedNodeSupport,
   onSetSelectedMemberAxialStiffness,
   onSetSelectedNodeHorizontalLoad,
@@ -31,10 +35,14 @@ export function EditorInspector({
   onVerticalMagnitudeChange,
 }: {
   selectedNode: Node2D | null
+  selectedNodeCount: number
   selectedMember: Member | null
   selectedNodeSupport: SupportType | undefined
+  selectedNodeSupportMixed: boolean
   selectedHorizontalLoad: Node2D['horizontalLoad']
+  selectedHorizontalLoadMixed: boolean
   selectedVerticalLoad: Node2D['verticalLoad']
+  selectedVerticalLoadMixed: boolean
   onSetSelectedNodeSupport: (support: SupportType | undefined) => void
   onSetSelectedMemberAxialStiffness: (axialStiffnessKn: number) => void
   onSetSelectedNodeHorizontalLoad: (
@@ -49,11 +57,16 @@ export function EditorInspector({
   onVerticalMagnitudeChange: (value: string) => void
 }) {
   if (selectedNode) {
+    const hasMultipleSelectedNodes = selectedNodeCount > 1
+    const nodeTitle = hasMultipleSelectedNodes
+      ? `${selectedNodeCount} selected nodes`
+      : 'Selected node'
+
     return (
       <div className="editor-overlay editor-inspector" aria-label="Selected node properties">
         <div className="inspector-header">
-          <span className="inspector-eyebrow">Node</span>
-          <span className="inspector-title">Selected node</span>
+          <span className="inspector-eyebrow">{hasMultipleSelectedNodes ? 'Nodes' : 'Node'}</span>
+          <span className="inspector-title">{nodeTitle}</span>
         </div>
 
         <div className="node-properties">
@@ -64,8 +77,9 @@ export function EditorInspector({
                 <EditorTooltipButton
                   key={option.title}
                   className={
-                    selectedNodeSupport === option.value ||
-                    (selectedNodeSupport === undefined && option.value === undefined)
+                    !selectedNodeSupportMixed &&
+                    (selectedNodeSupport === option.value ||
+                      (selectedNodeSupport === undefined && option.value === undefined))
                       ? 'tool-button support-chip is-active'
                       : 'tool-button support-chip'
                   }
@@ -88,6 +102,7 @@ export function EditorInspector({
                   <EditorTooltipButton
                     key={direction}
                     className={
+                      !selectedHorizontalLoadMixed &&
                       (selectedHorizontalLoad?.direction ?? 'right') === direction
                         ? 'tool-button direction-button is-active'
                         : 'tool-button direction-button'
@@ -111,7 +126,8 @@ export function EditorInspector({
                 type="number"
                 min="0"
                 step="0.1"
-                value={selectedHorizontalLoad?.magnitudeKn ?? 0}
+                value={selectedHorizontalLoadMixed ? '' : selectedHorizontalLoad?.magnitudeKn ?? 0}
+                placeholder={selectedHorizontalLoadMixed ? 'Mixed' : undefined}
                 onChange={(event) => onHorizontalMagnitudeChange(event.target.value)}
               />
               <span className="load-unit">kN</span>
@@ -124,6 +140,7 @@ export function EditorInspector({
                   <EditorTooltipButton
                     key={direction}
                     className={
+                      !selectedVerticalLoadMixed &&
                       (selectedVerticalLoad?.direction ?? 'down') === direction
                         ? 'tool-button direction-button is-active'
                         : 'tool-button direction-button'
@@ -147,7 +164,8 @@ export function EditorInspector({
                 type="number"
                 min="0"
                 step="0.1"
-                value={selectedVerticalLoad?.magnitudeKn ?? 0}
+                value={selectedVerticalLoadMixed ? '' : selectedVerticalLoad?.magnitudeKn ?? 0}
+                placeholder={selectedVerticalLoadMixed ? 'Mixed' : undefined}
                 onChange={(event) => onVerticalMagnitudeChange(event.target.value)}
               />
               <span className="load-unit">kN</span>

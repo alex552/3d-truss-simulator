@@ -4,11 +4,12 @@ import {
   createNode,
   deleteMember,
   deleteNode,
+  deleteNodes,
   moveNode,
   setMemberAxialStiffness,
-  setNodeHorizontalLoad,
-  setNodeSupport,
-  setNodeVerticalLoad,
+  setNodesHorizontalLoad,
+  setNodesSupport,
+  setNodesVerticalLoad,
   type ModelSnapshot,
 } from '../model/truss-operations'
 import type {
@@ -23,6 +24,7 @@ const MAX_HISTORY_STEPS = 100
 export type TrussEditorState = ModelSnapshot & {
   memberStartNodeId: string | null
   selectedEntity: SelectedEntity
+  selectedNodeIds: string[]
   activeTool: EditorTool
   showForceResults: boolean
   showDeflectionResults: boolean
@@ -32,11 +34,12 @@ export type TrussEditorState = ModelSnapshot & {
 
 export type TrussEditorAction =
   | { type: 'canvas-click'; x: number; y: number; nodeId: string; memberId: string }
-  | { type: 'node-click'; nodeId: string; memberId: string }
+  | { type: 'node-click'; nodeId: string; memberId: string; additive?: boolean }
   | { type: 'member-click'; memberId: string }
   | { type: 'move-node'; nodeId: string; x: number; y: number }
   | { type: 'delete-node'; nodeId: string }
   | { type: 'delete-member'; memberId: string }
+  | { type: 'delete-selection' }
   | { type: 'set-active-tool'; tool: EditorTool }
   | { type: 'cancel-member-drawing' }
   | { type: 'clear-model' }
@@ -63,6 +66,7 @@ export const initialTrussEditorState: TrussEditorState = {
   members: [],
   memberStartNodeId: null,
   selectedEntity: null,
+  selectedNodeIds: [],
   activeTool: 'member',
   showForceResults: true,
   showDeflectionResults: true,
@@ -80,6 +84,7 @@ export function trussEditorReducer(
         return {
           ...state,
           selectedEntity: null,
+          selectedNodeIds: [],
         }
       }
 
@@ -94,6 +99,7 @@ export function trussEditorReducer(
           ...state,
           nodes: [...state.nodes, node],
           selectedEntity: { type: 'node', id: node.id },
+          selectedNodeIds: [node.id],
         })
       }
 
@@ -103,6 +109,7 @@ export function trussEditorReducer(
           nodes: [...state.nodes, node],
           memberStartNodeId: node.id,
           selectedEntity: { type: 'node', id: node.id },
+          selectedNodeIds: [node.id],
         })
       }
 
@@ -115,14 +122,20 @@ export function trussEditorReducer(
         ],
         memberStartNodeId: null,
         selectedEntity: null,
+        selectedNodeIds: [],
       })
     }
 
     case 'node-click': {
       if (state.activeTool === 'select') {
+        if (action.additive) {
+          return toggleNodeSelection(state, action.nodeId)
+        }
+
         return {
           ...state,
           selectedEntity: { type: 'node', id: action.nodeId },
+          selectedNodeIds: [action.nodeId],
         }
       }
 
@@ -135,6 +148,7 @@ export function trussEditorReducer(
           ...state,
           memberStartNodeId: action.nodeId,
           selectedEntity: { type: 'node', id: action.nodeId },
+          selectedNodeIds: [action.nodeId],
         }
       }
 
@@ -143,6 +157,7 @@ export function trussEditorReducer(
           ...state,
           memberStartNodeId: null,
           selectedEntity: { type: 'node', id: action.nodeId },
+          selectedNodeIds: [action.nodeId],
         }
       }
 
@@ -154,6 +169,7 @@ export function trussEditorReducer(
         ],
         memberStartNodeId: null,
         selectedEntity: null,
+        selectedNodeIds: [],
       })
     }
 
@@ -165,6 +181,7 @@ export function trussEditorReducer(
       return {
         ...state,
         selectedEntity: { type: 'member', id: action.memberId },
+        selectedNodeIds: [],
       }
     }
 
@@ -176,14 +193,23 @@ export function trussEditorReducer(
 
     case 'delete-node': {
       const nextSnapshot = deleteNode(state, action.nodeId)
+      const remainingSelectedNodeIds = state.selectedNodeIds.filter(
+        (nodeId) => nodeId !== action.nodeId,
+      )
+      const nextSelectedNodeId =
+        remainingSelectedNodeIds[remainingSelectedNodeIds.length - 1] ?? null
+
       return withHistory(state, {
         ...state,
         ...nextSnapshot,
         memberStartNodeId:
           state.memberStartNodeId === action.nodeId ? null : state.memberStartNodeId,
+        selectedNodeIds: remainingSelectedNodeIds,
         selectedEntity:
           state.selectedEntity?.type === 'node' && state.selectedEntity.id === action.nodeId
-            ? null
+            ? nextSelectedNodeId
+              ? { type: 'node', id: nextSelectedNodeId }
+              : null
             : state.selectedEntity,
       })
     }
@@ -197,6 +223,34 @@ export function trussEditorReducer(
             ? null
             : state.selectedEntity,
       })
+
+    case 'delete-selection': {
+      const selectedNodeIds = getSelectedNodeIds(state)
+
+      if (selectedNodeIds.length > 0) {
+        const nextSnapshot = deleteNodes(state, selectedNodeIds)
+
+        return withHistory(state, {
+          ...state,
+          ...nextSnapshot,
+          memberStartNodeId: selectedNodeIds.includes(state.memberStartNodeId ?? '')
+            ? null
+            : state.memberStartNodeId,
+          selectedEntity: null,
+          selectedNodeIds: [],
+        })
+      }
+
+      if (state.selectedEntity?.type !== 'member') {
+        return state
+      }
+
+      return withHistory(state, {
+        ...state,
+        members: deleteMember(state.members, state.selectedEntity.id),
+        selectedEntity: null,
+      })
+    }
 
     case 'set-active-tool':
       return {
@@ -217,6 +271,7 @@ export function trussEditorReducer(
           ...state,
           memberStartNodeId: null,
           selectedEntity: null,
+          selectedNodeIds: [],
         }
       }
 
@@ -226,17 +281,21 @@ export function trussEditorReducer(
         members: [],
         memberStartNodeId: null,
         selectedEntity: null,
+        selectedNodeIds: [],
       })
 
-    case 'set-selected-node-support':
-      if (state.selectedEntity?.type !== 'node') {
+    case 'set-selected-node-support': {
+      const selectedNodeIds = getSelectedNodeIds(state)
+
+      if (selectedNodeIds.length === 0) {
         return state
       }
 
       return withHistory(state, {
         ...state,
-        nodes: setNodeSupport(state.nodes, state.selectedEntity.id, action.support),
+        nodes: setNodesSupport(state.nodes, selectedNodeIds, action.support),
       })
+    }
 
     case 'set-selected-member-axial-stiffness':
       if (state.selectedEntity?.type !== 'member') {
@@ -252,35 +311,41 @@ export function trussEditorReducer(
         ),
       })
 
-    case 'set-selected-node-horizontal-load':
-      if (state.selectedEntity?.type !== 'node') {
+    case 'set-selected-node-horizontal-load': {
+      const selectedNodeIds = getSelectedNodeIds(state)
+
+      if (selectedNodeIds.length === 0) {
         return state
       }
 
       return withHistory(state, {
         ...state,
-        nodes: setNodeHorizontalLoad(
+        nodes: setNodesHorizontalLoad(
           state.nodes,
-          state.selectedEntity.id,
+          selectedNodeIds,
           action.magnitudeKn,
           action.direction,
         ),
       })
+    }
 
-    case 'set-selected-node-vertical-load':
-      if (state.selectedEntity?.type !== 'node') {
+    case 'set-selected-node-vertical-load': {
+      const selectedNodeIds = getSelectedNodeIds(state)
+
+      if (selectedNodeIds.length === 0) {
         return state
       }
 
       return withHistory(state, {
         ...state,
-        nodes: setNodeVerticalLoad(
+        nodes: setNodesVerticalLoad(
           state.nodes,
-          state.selectedEntity.id,
+          selectedNodeIds,
           action.magnitudeKn,
           action.direction,
         ),
       })
+    }
 
     case 'load-model':
       return withHistory(state, {
@@ -289,6 +354,7 @@ export function trussEditorReducer(
         members: action.snapshot.members,
         memberStartNodeId: null,
         selectedEntity: null,
+        selectedNodeIds: [],
       })
 
     case 'undo': {
@@ -305,6 +371,7 @@ export function trussEditorReducer(
         redoStack: [pickSnapshot(state), ...state.redoStack],
         memberStartNodeId: null,
         selectedEntity: null,
+        selectedNodeIds: [],
       }
     }
 
@@ -322,6 +389,7 @@ export function trussEditorReducer(
         undoStack: [...state.undoStack, pickSnapshot(state)],
         memberStartNodeId: null,
         selectedEntity: null,
+        selectedNodeIds: [],
       }
     }
 
@@ -358,17 +426,19 @@ export function useTrussEditorState() {
           nodeId: crypto.randomUUID(),
           memberId: crypto.randomUUID(),
         }),
-      handleNodeClick: (nodeId: string) =>
+      handleNodeClick: (nodeId: string, additive = false) =>
         dispatch({
           type: 'node-click',
           nodeId,
           memberId: crypto.randomUUID(),
+          additive,
         }),
       handleMemberClick: (memberId: string) => dispatch({ type: 'member-click', memberId }),
       handleMoveNode: (nodeId: string, x: number, y: number) =>
         dispatch({ type: 'move-node', nodeId, x, y }),
       handleDeleteNode: (nodeId: string) => dispatch({ type: 'delete-node', nodeId }),
       handleDeleteMember: (memberId: string) => dispatch({ type: 'delete-member', memberId }),
+      handleDeleteSelection: () => dispatch({ type: 'delete-selection' }),
       handleSetActiveTool: (tool: EditorTool) => dispatch({ type: 'set-active-tool', tool }),
       handleCancelMemberDrawing: () => dispatch({ type: 'cancel-member-drawing' }),
       handleClearModel: () => dispatch({ type: 'clear-model' }),
@@ -426,6 +496,35 @@ function withHistory(state: TrussEditorState, nextState: TrussEditorState): Trus
         : nextUndoStack.slice(nextUndoStack.length - MAX_HISTORY_STEPS),
     redoStack: [],
   }
+}
+
+function toggleNodeSelection(state: TrussEditorState, nodeId: string): TrussEditorState {
+  const selectedNodeIds = getSelectedNodeIds(state)
+  const isSelected = selectedNodeIds.includes(nodeId)
+  const nextSelectedNodeIds = isSelected
+    ? selectedNodeIds.filter((selectedNodeId) => selectedNodeId !== nodeId)
+    : [...selectedNodeIds, nodeId]
+  const nextSelectedNodeId =
+    nextSelectedNodeIds[nextSelectedNodeIds.length - 1] ?? null
+
+  return {
+    ...state,
+    selectedEntity: nextSelectedNodeId
+      ? {
+          type: 'node',
+          id: nextSelectedNodeId,
+        }
+      : null,
+    selectedNodeIds: nextSelectedNodeIds,
+  }
+}
+
+function getSelectedNodeIds(state: TrussEditorState): string[] {
+  if (state.selectedNodeIds.length > 0) {
+    return state.selectedNodeIds
+  }
+
+  return state.selectedEntity?.type === 'node' ? [state.selectedEntity.id] : []
 }
 
 function pickSnapshot(snapshot: ModelSnapshot): ModelSnapshot {

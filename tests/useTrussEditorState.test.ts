@@ -23,6 +23,7 @@ describe('truss editor reducer', () => {
 
     expect(nextState.nodes).toMatchObject([{ id: 'node-1', x: 10, y: 20 }])
     expect(nextState.selectedEntity).toEqual({ type: 'node', id: 'node-1' })
+    expect(nextState.selectedNodeIds).toEqual(['node-1'])
     expect(nextState.undoStack).toHaveLength(1)
   })
 
@@ -71,6 +72,56 @@ describe('truss editor reducer', () => {
     expect(nextState.members).toBe(state.members)
     expect(nextState.undoStack).toHaveLength(0)
     expect(nextState.selectedEntity).toEqual({ type: 'node', id: 'node-1' })
+  })
+
+  it('adds nodes to the selection when shift-clicking with the select tool', () => {
+    const state = {
+      ...initialTrussEditorState,
+      activeTool: 'select' as const,
+      nodes: [
+        { id: 'node-1', x: 0, y: 0 },
+        { id: 'node-2', x: 10, y: 0 },
+      ],
+    }
+
+    const firstSelection = reduce(state, {
+      type: 'node-click',
+      nodeId: 'node-1',
+      memberId: 'unused-member',
+    })
+    const nextState = reduce(firstSelection, {
+      type: 'node-click',
+      nodeId: 'node-2',
+      memberId: 'unused-member',
+      additive: true,
+    })
+
+    expect(nextState.selectedNodeIds).toEqual(['node-1', 'node-2'])
+    expect(nextState.selectedEntity).toEqual({ type: 'node', id: 'node-2' })
+  })
+
+  it('applies selected node loads to every selected node', () => {
+    const state = {
+      ...initialTrussEditorState,
+      nodes: [
+        { id: 'node-1', x: 0, y: 0 },
+        { id: 'node-2', x: 10, y: 0 },
+      ],
+      selectedEntity: { type: 'node' as const, id: 'node-2' },
+      selectedNodeIds: ['node-1', 'node-2'],
+    }
+
+    const nextState = reduce(state, {
+      type: 'set-selected-node-vertical-load',
+      magnitudeKn: 12,
+      direction: 'down',
+    })
+
+    expect(nextState.nodes.map((node) => node.verticalLoad)).toEqual([
+      { magnitudeKn: 12, direction: 'down' },
+      { magnitudeKn: 12, direction: 'down' },
+    ])
+    expect(nextState.undoStack).toHaveLength(1)
   })
 
   it('clears the model and keeps it undoable', () => {

@@ -16,6 +16,7 @@ export default function App() {
     members,
     memberStartNodeId,
     selectedEntity,
+    selectedNodeIds,
     activeTool,
     showForceResults,
     showDeflectionResults,
@@ -110,13 +111,7 @@ export default function App() {
       }
 
       event.preventDefault()
-
-      if (selectedEntity.type === 'node') {
-        actions.handleDeleteNode(selectedEntity.id)
-        return
-      }
-
-      actions.handleDeleteMember(selectedEntity.id)
+      actions.handleDeleteSelection()
     }
 
     window.addEventListener('keydown', handleKeyDown)
@@ -133,6 +128,7 @@ export default function App() {
         activeTool={activeTool}
         memberStartNodeId={memberStartNodeId}
         selectedEntity={selectedEntity}
+        selectedNodeIds={selectedNodeIds}
         onCanvasClick={actions.handleCanvasClick}
         onNodeClick={actions.handleNodeClick}
         onMemberClick={actions.handleMemberClick}
