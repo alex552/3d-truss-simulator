@@ -172,12 +172,6 @@
   pointer-events: auto;
 }
 
-.editor-tool-cluster-status {
-  gap: 2px;
-  min-width: 72px;
-  padding: 8px 10px;
-}
-
 .editor-tool-item {
   display: flex;
   flex-direction: column;
@@ -333,7 +327,40 @@
   background: rgba(203, 213, 225, 0.9);
 }
 
-.editor-rail-status-label {
+.editor-structure-status {
+  right: 18px;
+  bottom: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 230px;
+  max-width: min(300px, calc(100% - 36px));
+  padding: 12px 14px;
+  border: 1px solid rgba(148, 163, 184, 0.5);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.14);
+  pointer-events: none;
+}
+
+.editor-stability-status-stable-determinate,
+.editor-stability-status-stable-indeterminate {
+  border-color: rgba(22, 101, 52, 0.28);
+  background: rgba(220, 252, 231, 0.92);
+}
+
+.editor-stability-status-unstable {
+  border-color: rgba(146, 64, 14, 0.28);
+  background: rgba(254, 243, 199, 0.94);
+}
+
+.editor-stability-status-invalid {
+  border-color: rgba(153, 27, 27, 0.28);
+  background: rgba(254, 226, 226, 0.94);
+}
+
+.editor-structure-status-label {
   color: #64748b;
   font-size: 10px;
   font-weight: 700;
@@ -341,15 +368,28 @@
   letter-spacing: 0.08em;
 }
 
-.editor-rail-status-value {
+.editor-structure-status-value {
   color: #0f172a;
-  font-size: 14px;
+  font-size: 18px;
   line-height: 1.2;
 }
 
-.editor-rail-status-meta {
+.editor-stability-status-stable-determinate .editor-structure-status-value,
+.editor-stability-status-stable-indeterminate .editor-structure-status-value {
+  color: #166534;
+}
+
+.editor-stability-status-unstable .editor-structure-status-value {
+  color: #92400e;
+}
+
+.editor-stability-status-invalid .editor-structure-status-value {
+  color: #991b1b;
+}
+
+.editor-structure-status-meta {
   color: #475569;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
 }
 
@@ -538,10 +578,21 @@
 }
 
 .displaced-member-line {
-  stroke: #0f766e;
   stroke-width: 3;
   stroke-linecap: round;
   stroke-dasharray: 10 6;
+}
+
+.displaced-member-line-tension {
+  stroke: #c92a2a;
+}
+
+.displaced-member-line-compression {
+  stroke: #1d4ed8;
+}
+
+.displaced-member-line-zero {
+  stroke: #475569;
 }
 
 .node-circle {
@@ -681,6 +732,13 @@
     right: 18px;
     width: min(280px, calc(100% - 98px));
     padding: 12px;
+  }
+
+  .editor-structure-status {
+    right: 14px;
+    bottom: 14px;
+    min-width: 0;
+    max-width: min(260px, calc(100% - 28px));
   }
 
   .load-editor-group {

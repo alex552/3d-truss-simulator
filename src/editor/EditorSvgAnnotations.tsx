@@ -132,11 +132,13 @@ export function DisplacedShapeOverlay({
   nodes,
   members,
   displacementByNodeId,
+  memberResultByMemberId,
   displayScale,
 }: {
   nodes: Node2D[]
   members: Member[]
   displacementByNodeId: Map<string, NodeDisplacement>
+  memberResultByMemberId: Map<string, MemberAnalysisResult>
   displayScale: number
 }) {
   const nodeById = new Map(nodes.map((node) => [node.id, node]))
@@ -169,7 +171,9 @@ export function DisplacedShapeOverlay({
             y1={displacedStart.y}
             x2={displacedEnd.x}
             y2={displacedEnd.y}
-            className="displaced-member-line"
+            className={`displaced-member-line displaced-member-line-${
+              memberResultByMemberId.get(member.id)?.state ?? 'zero'
+            }`}
           />
         )
       })}

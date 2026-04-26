@@ -183,6 +183,7 @@ export function Editor2D({
   const isStableAnalysis =
     analysis.status === 'stable-determinate' || analysis.status === 'stable-indeterminate'
   const showAnyResults = showForceResults || showDeflectionResults
+  const hasDrawnModel = nodes.length > 0 || members.length > 0
 
   const getScreenPointFromClient = (
     clientX: number,
@@ -588,6 +589,21 @@ export function Editor2D({
           onResetViewport={resetViewport}
         />
 
+        {hasDrawnModel ? (
+          <div
+            className={`editor-overlay editor-structure-status editor-stability-status editor-stability-status-${analysis.status}`}
+            aria-live="polite"
+          >
+            <span className="editor-structure-status-label">Current structure</span>
+            <strong className="editor-structure-status-value">
+              {formatStabilityValue(analysis.status)}
+            </strong>
+            <span className="editor-structure-status-meta">
+              {formatStabilityMeta(analysis.status)}
+            </span>
+          </div>
+        ) : null}
+
         <EditorInspector
           selectedNode={selectedNode}
           selectedMember={selectedMember}
@@ -691,6 +707,7 @@ export function Editor2D({
                   nodes={nodes}
                   members={members}
                   displacementByNodeId={displacementByNodeId}
+                  memberResultByMemberId={memberResultByMemberId}
                   displayScale={displacementDisplayScale}
                 />
               ) : null}
@@ -778,6 +795,28 @@ export function Editor2D({
 
 function formatGridStepLabel(valueMeters: number) {
   return `${Number(valueMeters.toFixed(2))} m`
+}
+
+function formatStabilityValue(status: TrussAnalysisResult['status']) {
+  return status === 'stable-determinate' || status === 'stable-indeterminate'
+    ? 'Stable'
+    : status === 'unstable'
+      ? 'Unstable'
+      : 'Invalid'
+}
+
+function formatStabilityMeta(status: TrussAnalysisResult['status']) {
+  if (status === 'stable-determinate') {
+    return 'Stiffness analysis: determinate'
+  }
+
+  if (status === 'stable-indeterminate') {
+    return 'Stiffness analysis: indeterminate'
+  }
+
+  return status === 'unstable'
+    ? 'Stiffness analysis: mechanism'
+    : 'Stiffness analysis: check model'
 }
 
 function getAutoPanDelta(screenPoint: Point, zoom: number) {
